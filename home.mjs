@@ -318,8 +318,17 @@ function parentDir() {
     setStatus('', 'info');
   }
 }
+// Where Enter launches agents: the HIGHLIGHTED entry. If the bar is on a folder,
+// agents open INSIDE that folder; if it is on a file (or the list is empty),
+// agents open in the current folder that holds it (you can't cd into a file).
+// To target the current folder itself, go up a level so it becomes the highlight.
+function launchTarget() {
+  const e = state.entries[state.dirSel];
+  if (e && e.isDir) return path.join(state.cwd, e.name);
+  return state.cwd;
+}
 function launch() {
-  const n = state.count, dir = state.cwd, name = path.basename(dir) || dir;
+  const n = state.count, dir = launchTarget(), name = path.basename(dir) || dir;
   const args = ['action', 'new-tab', '--layout', layoutPath(n), '--cwd', dir, '--name', name];
   let res;
   try { res = spawnSync('zellij', args, { encoding: 'utf8' }); }
@@ -453,10 +462,10 @@ function render() {
   }
   lines.push(sep);
 
-  // Launch
-  const launchName = path.basename(state.cwd) || state.cwd;
-  lines.push(hdr('LAUNCH') + '   ' + keyc('Enter') + ' ' + GREEN + 'open a new window of ' + RESET + BOLD + BGREEN + state.count + RESET +
-    GREEN + ' agent' + (state.count === 1 ? '' : 's') + ' in ' + RESET + BGREEN + truncate(asciiSafe(launchName), 22) + RESET);
+  // Launch — targets the HIGHLIGHTED folder (matches what Enter does).
+  const launchName = path.basename(launchTarget()) || launchTarget();
+  lines.push(hdr('LAUNCH') + '   ' + keyc('Enter') + ' ' + GREEN + 'open ' + RESET + BOLD + BGREEN + state.count + RESET +
+    GREEN + ' agent' + (state.count === 1 ? '' : 's') + ' in the highlighted folder: ' + RESET + BGREEN + truncate(asciiSafe(launchName), 24) + RESET);
   lines.push('  ' + GREEN + 'count ' + RESET + keyc('1') + GREEN + '..' + RESET + keyc('8') + GREEN + '   add more inside a tab with ' + RESET + keyc('Alt+a'));
   lines.push(sep);
 
