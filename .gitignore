@@ -1,0 +1,7 @@
+# OS / editor cruft
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+# Node (this app has zero deps, but just in case)
+node_modules/
