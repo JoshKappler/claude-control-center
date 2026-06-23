@@ -623,43 +623,101 @@ function onPrintable(ch) {
   // Unbound key: do nothing (no redraw -> holding it never flickers).
 }
 
+// Pure decoder: turn a raw byte string into high-level input EVENTS, fully
+// consuming (and discarding) any terminal escape / control sequence so its payload
+// bytes are NEVER mistaken for keystrokes. Terminals reply to queries (primary
+// device attributes `ESC[?...c`, OSC color reports `ESC]...rgb:...ST`, DCS, …) by
+// writing the response onto our stdin; the old parser stripped only the leading
+// ESC and replayed the rest as keys, so `rgb:` fired 'g' (PUSH) and `…c` fired 'c'
+// (PULL) and froze the UI. Returns { events, rest } where `rest` is the tail of an
+// as-yet-incomplete sequence (keep it and wait for the next chunk).
+const ARROW = { A: 'up', B: 'down', C: 'right', D: 'left' };
+function decodeInput(buf) {
+  const events = [];
+  let i = 0;
+  const n = buf.length;
+  while (i < n) {
+    const c = buf.charCodeAt(i);
+    if (c === 0x1b) {                              // ESC — start of an escape sequence
+      if (i + 1 >= n) break;                       // lone ESC so far — wait for more
+      const c1 = buf[i + 1];
+      if (c1 === '[') {                            // CSI: params 0x30-3f, intermeds 0x20-2f, final 0x40-7e
+        const m = buf.slice(i).match(/^\x1b\[[\x30-\x3f]*[\x20-\x2f]*([\x40-\x7e])/);
+        if (!m) break;                             // incomplete CSI — wait for the final byte
+        const dir = ARROW[m[1]];                   // any non-arrow CSI (DA reports, …) is ignored
+        if (dir) events.push({ kind: 'arrow', dir });
+        i += m[0].length; continue;
+      }
+      if (c1 === 'O') {                            // SS3 (application cursor keys): ESC O <final>
+        if (i + 2 >= n) break;
+        const dir = ARROW[buf[i + 2]];
+        if (dir) events.push({ kind: 'arrow', dir });
+        i += 3; continue;
+      }
+      if (c1 === ']') {                            // OSC: ... (BEL | ST) — color reports etc., ignored
+        const bel = buf.indexOf('\x07', i + 2);
+        const st = buf.indexOf('\x1b\\', i + 2);
+        let end = -1, skip = 0;
+        if (bel !== -1 && (st === -1 || bel < st)) { end = bel; skip = 1; }
+        else if (st !== -1) { end = st; skip = 2; }
+        if (end === -1) break;                     // unterminated — wait for more
+        i = end + skip; continue;
+      }
+      if (c1 === 'P' || c1 === 'X' || c1 === '^' || c1 === '_') {  // DCS/SOS/PM/APC ... ST — ignored
+        const st = buf.indexOf('\x1b\\', i + 2);
+        if (st === -1) break;
+        i = st + 2; continue;
+      }
+      i += 2; continue;                            // other 2-byte escape (ESC =, ESC >, …) — ignored
+    }
+    i += 1;                                        // a concrete, non-escape key
+    if (c === 0x03) { events.push({ kind: 'quit' }); continue; }
+    if (c === 0x0d || c === 0x0a) { events.push({ kind: 'enter' }); continue; }
+    if (c === 0x09) { events.push({ kind: 'tab' }); continue; }
+    if (c < 0x20 || c === 0x7f) continue;          // ignore other control bytes
+    events.push({ kind: 'char', ch: buf[i - 1] });
+  }
+  return { events, rest: buf.slice(i) };
+}
+
+function applyEvent(ev) {
+  if (ev.kind === 'arrow') act(ev.dir, null);
+  else if (ev.kind === 'enter') act('enter');
+  else if (ev.kind === 'tab') act('tab');
+  else if (ev.kind === 'quit') act('quit');
+  else if (ev.kind === 'char') act(null, ev.ch);
+}
+let dispatchEvent = applyEvent;                    // swappable so tests can observe without side effects
+
 let inbuf = '';
 let escFlushTimer = null;
 function clearEscFlush() { if (escFlushTimer) { clearTimeout(escFlushTimer); escFlushTimer = null; } }
-function dispatchOne() {
-  if (!inbuf.length) return false;
-  const c0 = inbuf.charCodeAt(0);
-  if (c0 === 0x1b) {
-    const m = inbuf.match(/^\x1b(\[|O)[0-9;]*([A-Za-z~])/);
-    if (m) {
-      const map = { A: 'up', B: 'down', C: 'right', D: 'left' };
-      const action = map[m[2]];
-      inbuf = inbuf.slice(m[0].length);
-      if (action) act(action, null);
-      return true;
-    }
-    if (inbuf.length <= 2) return false; // partial escape — wait for more
-    inbuf = inbuf.slice(1);              // garbled escape — drop ESC
-    return true;
-  }
-  const ch = inbuf[0];
-  inbuf = inbuf.slice(1);
-  if (c0 === 0x03) { act('quit'); return true; }
-  if (c0 === 0x0d || c0 === 0x0a) { act('enter'); return true; }
-  if (c0 === 0x09) { act('tab'); return true; }
-  if (c0 < 0x20 || c0 === 0x7f) return true; // ignore other control bytes
-  act(null, ch);
-  return true;
+
+// Right after raw mode is enabled the terminal dumps a burst of query-responses
+// (DA, OSC color reports) onto stdin. Some arrive header-less (bare `rgb:…`), so
+// no parser can tell them from typed keys. They come as ONE cluster at startup, so
+// we simply drop all input until the stream has been quiet for a beat. A hard cap
+// in main() guarantees the keyboard always comes alive even if reports keep
+// trickling. Real launches give the user far longer than this to reach for a key.
+let acceptInput = false;
+let settleTimer = null;
+function settleInput() {
+  if (acceptInput) return;
+  if (settleTimer) clearTimeout(settleTimer);
+  settleTimer = setTimeout(() => { settleTimer = null; acceptInput = true; inbuf = ''; }, 200);
 }
+
 function feed(chunk) {
+  if (!acceptInput) { settleInput(); return; }     // swallow the startup report burst
   clearEscFlush();
   inbuf += Buffer.isBuffer(chunk) ? chunk.toString('latin1') : String(chunk);
-  let safety = 0;
-  while (inbuf.length && dispatchOne()) { if (++safety > 4096) { inbuf = ''; break; } }
+  const { events, rest } = decodeInput(inbuf);
+  inbuf = rest;
+  for (const ev of events) dispatchEvent(ev);
+  // A lingering, incomplete escape sequence (rare): drop it after a beat so its
+  // bytes can never later be re-read as printable keys.
   if (inbuf.length && inbuf.charCodeAt(0) === 0x1b) {
-    escFlushTimer = setTimeout(() => {
-      if (inbuf.length && inbuf.charCodeAt(0) === 0x1b) { inbuf = inbuf.slice(1); let s = 0; while (inbuf.length && dispatchOne()) { if (++s > 4096) { inbuf = ''; break; } } }
-    }, 60);
+    escFlushTimer = setTimeout(() => { inbuf = ''; escFlushTimer = null; }, 60);
   }
 }
 
@@ -683,6 +741,10 @@ function main() {
   out(ALT_ON + CURSOR_HIDE + ESC + '[2J' + HOME_POS);
   try { if (typeof process.stdin.setRawMode === 'function') process.stdin.setRawMode(true); } catch { /* */ }
   try { process.stdin.resume(); } catch { /* */ }
+  // Ignore the terminal's startup query-response burst, but make sure the keyboard
+  // always wakes: settleInput() opens after 200ms of quiet, the hard cap after 1.5s.
+  settleInput();
+  setTimeout(() => { acceptInput = true; inbuf = ''; }, 1500);
   process.stdin.on('data', (chunk) => { try { feed(chunk); } catch (e) { setStatus('input error: ' + asciiSafe(e && e.message), 'error'); try { redraw(); } catch { /* */ } } });
   process.stdin.on('error', () => { /* ignore */ });
   process.on('SIGINT', () => cleanupAndExit(0));
@@ -696,4 +758,34 @@ function main() {
   timer = setInterval(tick, 1000);
 }
 
-main();
+// Run the TUI only when launched directly (`node home.mjs`); stay importable so
+// input.test.mjs can exercise the parser without entering the alt screen.
+function isDirectRun() {
+  // Case-insensitive (Windows paths) so a casing quirk never wrongly suppresses
+  // the TUI; on any error we default to running it (never strand a blank screen).
+  try { return !!process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase(); }
+  catch { return true; }
+}
+if (isDirectRun()) main();
+
+// Test hooks (no effect in normal operation).
+export { decodeInput, feed };
+export function __setDispatch(fn) { dispatchEvent = fn || applyEvent; }
+export function __acceptInputNow() { acceptInput = true; inbuf = ''; }
+export function __resetInput() { acceptInput = false; inbuf = ''; if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; } }
+
+// Render ONE frame at a given size and return the raw output string — lets the
+// layout be verified deterministically at any terminal size, with no TTY.
+export function __renderFrame(rows, cols) {
+  const pr = process.stdout.rows, pc = process.stdout.columns, pw = process.stdout.write;
+  let buf = '';
+  try {
+    process.stdout.rows = rows; process.stdout.columns = cols;
+    process.stdout.write = (s) => { buf += s; return true; };
+    ensureStateRoot(); loadEntries(); state.sync = readSync();
+    render();
+  } finally {
+    process.stdout.write = pw; process.stdout.rows = pr; process.stdout.columns = pc;
+  }
+  return buf;
+}
