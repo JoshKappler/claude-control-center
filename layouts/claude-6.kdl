@@ -4,7 +4,7 @@ layout {
         pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
         children
     }
-    tab name="agents" {
+    tab {
         pane split_direction="horizontal" {
             pane size=1 borderless=true command="node" {
                 args "{{APP}}/agentbar.mjs"

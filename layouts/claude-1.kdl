@@ -4,7 +4,7 @@ layout {
         pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
         children
     }
-    tab name="agents" {
+    tab {
         // Shortcut bar on top (kept in the tab content so it always shows), agent below.
         pane split_direction="horizontal" {
             pane size=1 borderless=true command="node" {
