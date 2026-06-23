@@ -46,6 +46,28 @@ an empty Subagents list.
 
 Both operate on `~/OneDrive/desktop/projects` and skip the `dotfiles` repo.
 
+## Always-on background sync
+
+The `g`/`c` buttons are the manual path. For hands-off sync, `sync-daemon.mjs`
+does the same thing on a schedule, with **no dashboard open**, and it self-updates
+this repo first so the control center keeps itself current across machines:
+
+1. `git pull --ff-only` on this repo (the meta bit — the tool updates itself).
+2. Run the freshly-pulled `clone-all.mjs` over the projects folder this repo sits
+   in: clone anything new, fast-forward the rest, leave dirty/diverged repos alone.
+
+On macOS it is wired to launchd so it is hardwired into startup and always running:
+
+```sh
+bash macos/install-sync-agent.sh      # runs at every login + every 10 min
+# CC_SYNC_INTERVAL=300 bash macos/install-sync-agent.sh   # custom interval (seconds)
+bash macos/uninstall-sync-agent.sh    # stop + remove (repos/logs untouched)
+```
+
+Watch it: `tail -f ~/.claude/state/cc/sync.log`. Each line is one tick, e.g.
+`self-update: ok | up-to-date=24 cloned=1 skipped=5`. The full last result is in
+`~/.claude/state/cc/sync-last.json`.
+
 ## Files
 
 | File | Role |
@@ -54,7 +76,9 @@ Both operate on `~/OneDrive/desktop/projects` and skip the `dotfiles` repo.
 | `statusline.mjs` | statusLine for `~/.claude/settings.json`. Prints `model · ctx% · task` and writes `agents/<sessionId>.json`. |
 | `inspector.mjs` | Live subagent inspector, opened in a Zellij floating pane. |
 | `git-push-all.mjs` | `node git-push-all.mjs <root>` → pushes repos under `<root>` (excludes `dotfiles`), prints JSON. Never force-pushes. |
-| `clone-all.mjs` | `node clone-all.mjs <root>` → clones missing + `--ff-only` pulls all your GitHub repos. Never discards local work. |
+| `clone-all.mjs` | `node clone-all.mjs <root>` → clones missing + `--ff-only` pulls all your GitHub repos. Finds clones **one level deep too** (e.g. `other/algora`) and updates them in place instead of re-cloning a top-level duplicate. Never discards local work. |
+| `sync-daemon.mjs` | **Always-on background sync.** Self-updates this repo (`git pull --ff-only`), then runs `clone-all.mjs` over the projects folder it lives in. Run on a schedule by the macOS LaunchAgent. Logs to `~/.claude/state/cc/sync.log`. |
+| `macos/install-sync-agent.sh` | Installs `sync-daemon.mjs` as a LaunchAgent that runs at login and every 10 min. `macos/uninstall-sync-agent.sh` removes it. |
 | `agentbar.mjs` | One-line shortcut bar shown above each agent tab. |
 | `hooks/session-register.mjs` | SessionStart/SessionEnd hook: maintains `panes/<id>` and cleans up state. |
 | `hooks/subagent-track.mjs` | Subagent/tool hooks: maintains `subagents/<parent>/<agentId>.json`. |
