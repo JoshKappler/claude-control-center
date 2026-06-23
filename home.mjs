@@ -417,18 +417,6 @@ function render() {
   lines.push(leftRight(titleL.length, BOLD + BGREEN + titleL + RESET, rightVis.length, GREEN + dt.pretty + RESET + '   ' + BOLD + BGREEN + dt.hms + RESET, W));
   lines.push(sep);
 
-  // BASICS — always-visible, plain-English "how to drive this". This is the
-  // single most important thing for someone who has never used the TUI.
-  lines.push(' ' + GREEN + 'Use the ' + RESET + BOLD + BGREEN + 'ARROW KEYS' + RESET + GREEN + ':  ' + RESET +
-    BOLD + BBLUE + 'Up/Down' + RESET + GREEN + ' move the bar   ' + RESET +
-    BOLD + BBLUE + 'Right' + RESET + GREEN + ' open folder   ' + RESET +
-    BOLD + BBLUE + 'Left' + RESET + GREEN + ' go back' + RESET);
-  lines.push(' ' + BOLD + BBLUE + 'Enter' + RESET + GREEN + ' launch agents here    ' + RESET +
-    BOLD + BBLUE + 'g' + RESET + GREEN + ' push to GitHub    ' + RESET +
-    BOLD + BBLUE + 'c' + RESET + GREEN + ' pull from GitHub    ' + RESET +
-    BOLD + BBLUE + '?' + RESET + GREEN + ' full help' + RESET);
-  lines.push(sep);
-
   // Folder
   lines.push(BOLD + BGREEN + 'Folder ' + RESET + GREEN + truncate(asciiSafe(state.cwd), W - 8) + RESET);
 
@@ -438,28 +426,9 @@ function render() {
   const dirFocused = state.focus === 'dirs';
   if (dirFocused) lines.push(REV + BOLD + BGREEN + pad(' FOLDERS  - the arrow keys are controlling THIS list', W) + RESET);
   else lines.push('  ' + DGREEN + 'FOLDERS   (press Tab to bring the arrow keys here)' + RESET);
-  const totalRows = termRows();
-  const navRows = Math.max(3, Math.min(8, totalRows - 34));
-  if (state.entries.length === 0) {
-    lines.push('    ' + DGREEN + '(this folder has no sub-folders)' + RESET);
-  } else {
-    let start = 0;
-    if (state.dirSel >= navRows) start = state.dirSel - navRows + 1;
-    const end = Math.min(state.entries.length, start + navRows);
-    for (let i = start; i < end; i++) {
-      const e = state.entries[i];
-      const sel = (i === state.dirSel && dirFocused);
-      const label = (e.isDir ? e.name + '/' : e.name);
-      if (sel) {
-        // Full-width reverse-video bar = unmistakable "this is selected".
-        lines.push(REV + BOLD + BGREEN + pad('  > ' + label, W) + RESET);
-      } else {
-        const col = e.isDir ? GREEN : DGREEN;
-        lines.push('    ' + col + truncate(label, W - 6) + RESET);
-      }
-    }
-    if (end < state.entries.length || start > 0) lines.push('    ' + DGREEN + '(' + (state.dirSel + 1) + ' of ' + state.entries.length + ')' + RESET);
-  }
+  // The folder entries are sized + spliced in LAST (see end of render) so the list
+  // grows to fill whatever vertical space the rest of the dashboard leaves free.
+  const folderInsertAt = lines.length;
   lines.push(sep);
 
   // Launch — targets the HIGHLIGHTED folder (matches what Enter does).
@@ -539,6 +508,38 @@ function render() {
   lines.push(BOLD + BGREEN + pad('MOVE', 7) + RESET + keyc('Up') + keyc('Dn') + GREEN + ' move bar' + RESET + C + keyc('->') + GREEN + ' open folder' + RESET + C + keyc('<-') + GREEN + ' back' + RESET + C + keyc('Tab') + GREEN + ' switch list' + RESET);
   lines.push(BOLD + BGREEN + pad('DO', 7) + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' #agents' + RESET + C + keyc('Enter') + GREEN + ' launch' + RESET + C + keyc('g') + GREEN + ' push' + RESET + C + keyc('c') + GREEN + ' pull' + RESET + C + keyc('?') + GREEN + ' help' + RESET + C + keyc('q') + GREEN + ' quit' + RESET);
   lines.push(BOLD + BGREEN + pad('WINDOW', 7) + RESET + BOLD + BBLUE + 'Alt+[ Alt+]' + RESET + GREEN + ' switch window' + RESET + C + keyc('Alt+a') + GREEN + ' add agent' + RESET + C + keyc('Ctrl+Alt+w') + GREEN + ' close' + RESET + C + keyc('Ctrl+g') + GREEN + ' lock' + RESET);
+
+  // Fill the leftover vertical space with folder entries, then splice them under
+  // the FOLDERS header. Measuring the rest of the dashboard (instead of a fixed
+  // constant) keeps the cheat sheet pinned at the bottom however tall the other
+  // sections are, and self-corrects on resize / when subagents appear.
+  {
+    const folderLines = [];
+    if (state.entries.length === 0) {
+      folderLines.push('    ' + DGREEN + '(this folder has no sub-folders)' + RESET);
+    } else {
+      const all = state.entries.length;
+      const avail = Math.max(3, termRows() - 1 - lines.length);   // -1: leave the bottom row clear
+      let start = 0, count = all, indicator = false;
+      if (all > avail) {
+        count = avail - 1;                                        // reserve a row for the (N of M) line
+        indicator = true;
+        if (state.dirSel >= count) start = state.dirSel - count + 1;
+        if (start > all - count) start = all - count;            // don't scroll past the end
+        if (start < 0) start = 0;
+      }
+      const end = Math.min(all, start + count);
+      for (let i = start; i < end; i++) {
+        const e = state.entries[i];
+        const sel = (i === state.dirSel && dirFocused);
+        const label = (e.isDir ? e.name + '/' : e.name);
+        if (sel) folderLines.push(REV + BOLD + BGREEN + pad('  > ' + label, W) + RESET);   // selected = full-width reverse bar
+        else folderLines.push('    ' + (e.isDir ? GREEN : DGREEN) + truncate(label, W - 6) + RESET);
+      }
+      if (indicator) folderLines.push('    ' + DGREEN + '(' + (state.dirSel + 1) + ' of ' + all + ')' + RESET);
+    }
+    lines.splice(folderInsertAt, 0, ...folderLines);
+  }
 
   // Differential frame: home cursor, clear each line to EOL, clear below at the
   // end. No full-screen [2J -> no flicker when keys repeat.
