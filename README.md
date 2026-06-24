@@ -3,6 +3,14 @@
 A single tabbed control center for launching and monitoring Claude Code agents,
 plus one-button **GitHub sync** to keep all your devices in step.
 
+![The control center: folder picker, GitHub sync, session-limit gauges, and live system stats](docs/screenshots/control-center.png)
+
+![A Zellij tab running three Claude Code agents in parallel](docs/screenshots/agents.png)
+
+<sub>Top: the home dashboard — a folder picker that launches 1–8 agents, one-button
+GitHub push/pull, live 5-hour and weekly rate-limit gauges, and CPU/MEM/DISK/GPU
+stats. Bottom: a single Zellij tab driving three Claude Code agents at once.</sub>
+
 This is the **canonical source** and it lives in your projects folder
 (`~/OneDrive/desktop/projects/claude-control-center`) as its own GitHub repo, so
 you can edit it, push it, and pull it on any device exactly like any other
