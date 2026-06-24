@@ -330,14 +330,46 @@ function launchTarget() {
   if (e && e.isDir) return path.join(state.cwd, e.name);
   return state.cwd;
 }
+// ---------- fork-bomb guard ----------
+// launch() spawns up to 8 `claude` panes per call. With no limiter, a burst of
+// synthetic Enter events — a stuck key, or a mis-parsed terminal query-reply —
+// spawns agents without bound. That is the failure that once opened "a million"
+// Claude instances and crashed the machine. Two independent brakes prevent it:
+//   1. rate limit  — at most one launch per LAUNCH_MIN_INTERVAL_MS, so a flood of
+//      Enters collapses to a single launch.
+//   2. absolute cap — a single Home session may ever spawn at most MAX_SESSION_PANES
+//      panes, so even slow repeats can't run away.
+const LAUNCH_MIN_INTERVAL_MS = 1500;
+const MAX_SESSION_PANES = 24;
+const launchGuard = { lastAt: 0, panes: 0 };
+// Pure decision (no side effects, no clock) so it is unit-testable: pass the
+// current time and the number of panes requested. Returns {ok} or {ok:false,reason}.
+function checkLaunchAllowed(now, requested, st = launchGuard) {
+  if (now - st.lastAt < LAUNCH_MIN_INTERVAL_MS) return { ok: false, reason: 'too-fast' };
+  if (st.panes + requested > MAX_SESSION_PANES) return { ok: false, reason: 'cap' };
+  return { ok: true };
+}
+
 function launch() {
   const n = state.count, dir = launchTarget(), name = path.basename(dir) || dir;
+  const now = Date.now();
+  const gate = checkLaunchAllowed(now, n);
+  if (!gate.ok) {
+    setStatus(gate.reason === 'too-fast'
+      ? 'Launch ignored: too many launches too fast -- wait a moment, then press Enter.'
+      : 'Launch blocked: this dashboard has already opened ' + launchGuard.panes + ' agent panes (cap ' + MAX_SESSION_PANES + '). Reopen the dashboard for a fresh budget.',
+      'error');
+    return;
+  }
+  // Stamp the time BEFORE spawning so a failed/slow spawn still rate-limits the next press.
+  launchGuard.lastAt = now;
   const args = ['action', 'new-tab', '--layout', layoutPath(n), '--cwd', dir, '--name', name];
   let res;
   try { res = spawnSync('zellij', args, { encoding: 'utf8' }); }
   catch (e) { setStatus('Launch failed: ' + asciiSafe(e && e.message), 'error'); return; }
   if (res.error) { setStatus(res.error.code === 'ENOENT' ? 'zellij not found on PATH' : 'Launch error: ' + asciiSafe(res.error.message), 'error'); return; }
   if (res.status !== 0) { setStatus('zellij returned error: ' + truncate(asciiSafe((res.stderr || res.stdout || '').toString().trim().split('\n').pop() || ''), 60), 'error'); return; }
+  launchGuard.panes += n;   // count only panes that actually spawned
   setStatus('Launched ' + n + ' agent' + (n === 1 ? '' : 's') + ' in ' + asciiSafe(name) + ' (switch back with Alt+[ )', 'ok');
 }
 function gitPush() {
@@ -875,7 +907,7 @@ function isDirectRun() {
 if (isDirectRun()) main();
 
 // Test hooks (no effect in normal operation).
-export { decodeInput, feed };
+export { decodeInput, feed, checkLaunchAllowed, LAUNCH_MIN_INTERVAL_MS, MAX_SESSION_PANES };
 export function __setDispatch(fn) { dispatchEvent = fn || applyEvent; }
 export function __acceptInputNow() { acceptInput = true; inbuf = ''; }
 export function __resetInput() { acceptInput = false; inbuf = ''; if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; } }
