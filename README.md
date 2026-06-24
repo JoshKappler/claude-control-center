@@ -24,9 +24,15 @@ The dashboard always shows a plain-English guide at the top, and a bright
 | `Up` / `Down` | Move the green highlight bar |
 | `Right` | Open the highlighted folder (go into it) |
 | `Left` | Go back out to the parent folder |
-| `1`–`8` then `Enter` | Launch that many Claude agents in the selected folder |
+| `1`–`8` **then** `Enter` | Two steps: press a number to pick how many agents, **then** press Enter to launch them in the highlighted folder |
+| `n` | **New folder** — type a name + Enter to create a folder inside the one you're viewing (empty + Enter cancels) |
 | `g` | **PUSH** — upload your committed work to GitHub (never overwrites newer cloud changes) |
 | `c` | **PULL** — download everything from GitHub (never deletes your local work) |
+
+Inside an agent window (tab), the green **shortcut bar** pinned at the top lists the
+keys for managing the Claude instances in it: `Alt+a` add another, `Alt+[` / `Alt+]`
+switch windows, `Ctrl+Alt+w` close the focused one, `Ctrl+g` lock keys to Claude.
+Click the **Home** tab (leftmost) to come back to the dashboard.
 | `Tab` | Switch the arrows to the Subagents list (only when something is there) |
 | `?` | Full-screen plain-English help |
 | `q` / `Ctrl+C` | Quit the dashboard (running agents keep going) |
@@ -47,6 +53,13 @@ an empty Subagents list.
 Both operate on `~/OneDrive/desktop/projects` and skip the `dotfiles` repo.
 
 ## Always-on background sync
+
+**On open (Windows):** launching the control center (Ctrl+Alt+C → the Home tab)
+kicks off a **silent, windowless** PULL in the background — same as pressing `c`,
+same safety (clone missing + fast-forward, never discards local work). So opening
+the dashboard is instant *and* every repo is brought current, with no separate
+clone window stealing focus at boot. The SYNC section shows `syncing now...` while
+it runs, then the result.
 
 The `g`/`c` buttons are the manual path. For hands-off sync, `sync-daemon.mjs`
 does the same thing on a schedule, with **no dashboard open**, and it self-updates

@@ -23,7 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 // ---------- shared state ----------
@@ -141,6 +141,9 @@ const state = {
   sys: null,
   sync: readSync(),
   showHelp: false,   // ? toggles a full-screen plain-English help overlay
+  prompt: null,      // when set ('newfolder'), the status line becomes a text input
+  promptValue: '',   // the characters typed so far in that input
+  autoSync: false,   // a silent background repo-sync is running (started at launch)
 };
 
 function loadEntries() {
@@ -383,6 +386,68 @@ function cloneAll() {
   const body = parts.length ? parts.join(', ') : 'everything already up to date';
   setStatus('PULL done: ' + body + '  (' + parsed.repos.length + ' repo' + (parsed.repos.length === 1 ? '' : 's') + ' checked)' + (errs ? ', ' + errs + ' error(s)' : ''), errs ? 'error' : 'ok');
 }
+// Silent, windowless repo sync kicked off when Home opens, so pressing the global
+// hotkey shows the control center INSTANTLY and the "pull everything from GitHub"
+// work happens in the background (matching what [c] PULL does, same safety: clone
+// missing + fast-forward, never discard local work). No console window, never
+// blocks the UI. Result is folded into the SYNC section when it finishes.
+function startBackgroundSync() {
+  if (state.autoSync) return;
+  const root = defaultRoot();
+  let child;
+  try {
+    child = spawn('node', [cloneAllPath(), root], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch { return; }
+  state.autoSync = true;
+  setStatus('Auto-sync: pulling the latest from GitHub in the background (your local work is never deleted)...', 'info');
+  let out = '';
+  try { child.stdout.on('data', (d) => { out += d.toString(); }); } catch { /* */ }
+  child.on('error', () => { state.autoSync = false; setStatus('', 'info'); try { redraw(); } catch { /* */ } });
+  child.on('close', () => {
+    state.autoSync = false;
+    let parsed = null;
+    try { parsed = JSON.parse((out || '').trim()); } catch { parsed = null; }
+    if (parsed && Array.isArray(parsed.repos)) {
+      const cloned = parsed.repos.filter((r) => r.action === 'cloned').length;
+      const updated = parsed.repos.filter((r) => r.action === 'updated').length;
+      state.sync.lastCloneAt = Date.now();
+      writeSync({ lastCloneAt: state.sync.lastCloneAt });
+      const parts = [];
+      if (cloned) parts.push('downloaded ' + cloned + ' new');
+      if (updated) parts.push('updated ' + updated);
+      setStatus('Auto-sync done: ' + (parts.length ? parts.join(', ') : 'everything already up to date') +
+        '  (' + parsed.repos.length + ' repo' + (parsed.repos.length === 1 ? '' : 's') + ' checked)', 'ok');
+    } else {
+      setStatus('', 'info');
+    }
+    try { redraw(); } catch { /* */ }
+  });
+  try { child.unref(); } catch { /* */ }
+}
+
+// Create a new folder INSIDE the folder currently being viewed (state.cwd). Driven
+// by the small text-input prompt (started with [n]); commit with Enter.
+function createFolder(rawName) {
+  const name = String(rawName == null ? '' : rawName).trim();
+  state.prompt = null; state.promptValue = '';
+  if (!name) { setStatus('New folder cancelled.', 'info'); return; }
+  if (/[\\/:*?"<>|]/.test(name) || name === '.' || name === '..') {
+    setStatus('Invalid name. A folder name cannot contain  \\ / : * ? " < > |', 'error'); return;
+  }
+  const target = path.join(state.cwd, name);
+  try {
+    if (fs.existsSync(target)) { setStatus('A folder named "' + asciiSafe(name) + '" already exists here.', 'error'); return; }
+    fs.mkdirSync(target);
+    loadEntries();
+    state.focus = 'dirs';
+    const idx = state.entries.findIndex((e) => e.isDir && e.name === name);
+    if (idx >= 0) state.dirSel = idx;
+    setStatus('Created folder "' + asciiSafe(name) + '" in ' + asciiSafe(path.basename(state.cwd) || state.cwd) + '.', 'ok');
+  } catch (err) {
+    setStatus('Could not create folder: ' + asciiSafe(err && err.message), 'error');
+  }
+}
+
 function openInspector() {
   const p = state.subParents[state.subSel];
   if (!p) { setStatus('No subagent group selected', 'error'); return; }
@@ -431,11 +496,15 @@ function render() {
   const folderInsertAt = lines.length;
   lines.push(sep);
 
-  // Launch — targets the HIGHLIGHTED folder (matches what Enter does).
+  // Launch — targets the HIGHLIGHTED folder (matches what Enter does). Spelled out
+  // as two explicit steps because "pick a number AND press Enter" was unclear.
   const launchName = path.basename(launchTarget()) || launchTarget();
-  lines.push(hdr('LAUNCH') + '   ' + keyc('Enter') + ' ' + GREEN + 'open ' + RESET + BOLD + BGREEN + state.count + RESET +
-    GREEN + ' agent' + (state.count === 1 ? '' : 's') + ' in the highlighted folder: ' + RESET + BGREEN + truncate(asciiSafe(launchName), 24) + RESET);
-  lines.push('  ' + GREEN + 'count ' + RESET + keyc('1') + GREEN + '..' + RESET + keyc('8') + GREEN + '   add more inside a tab with ' + RESET + keyc('Alt+a'));
+  lines.push(hdr('LAUNCH') + '   ' + keyc('Enter') + GREEN + ' opens ' + RESET + BOLD + BGREEN + state.count + RESET +
+    GREEN + ' Claude agent' + (state.count === 1 ? '' : 's') + ' in: ' + RESET + BGREEN + truncate(asciiSafe(launchName), 22) + RESET);
+  lines.push('  ' + GREEN + 'Step 1: press a number ' + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' = how many' + RESET +
+    DGREEN + ' (now: ' + RESET + BOLD + BGREEN + state.count + RESET + DGREEN + ')' + RESET + GREEN + '    Step 2: press ' + RESET + keyc('Enter'));
+  lines.push('  ' + DGREEN + 'inside a tab: ' + RESET + keyc('Alt+a') + GREEN + ' add another' + RESET + DGREEN + ' . ' + RESET +
+    keyc('Alt+[') + keyc('Alt+]') + GREEN + ' switch' + RESET + DGREEN + ' . ' + RESET + keyc('Ctrl+Alt+w') + GREEN + ' close' + RESET);
   lines.push(sep);
 
   // Sync — the GitHub buttons. Plain-English, with the safety promise spelled out.
@@ -443,7 +512,8 @@ function render() {
   lines.push('  ' + keyc('g') + ' ' + BOLD + BGREEN + 'PUSH' + RESET + GREEN + ' - upload my committed work' + RESET +
     DGREEN + '  (never overwrites newer cloud changes)' + RESET + '   ' + DGREEN + 'last: ' + RESET + BGREEN + relAgo(state.sync.lastPushAt) + RESET);
   lines.push('  ' + keyc('c') + ' ' + BOLD + BGREEN + 'PULL' + RESET + GREEN + ' - download everything ' + RESET +
-    DGREEN + '  (never deletes your local work)' + RESET + '        ' + DGREEN + 'last: ' + RESET + BGREEN + relAgo(state.sync.lastCloneAt) + RESET);
+    DGREEN + '  (never deletes your local work)' + RESET + '        ' + DGREEN + (state.autoSync ? '' : 'last: ') + RESET +
+    BGREEN + (state.autoSync ? 'syncing now...' : relAgo(state.sync.lastCloneAt)) + RESET);
   lines.push(sep);
 
   // Session limits
@@ -493,8 +563,12 @@ function render() {
   else lines.push(statLine('GPU', null, 'no nvidia-smi'));
   lines.push(sep);
 
-  // Status line
-  if (state.status) {
+  // Status line — or the new-folder text input when that prompt is active.
+  if (state.prompt === 'newfolder') {
+    lines.push(BOLD + BGREEN + 'New folder in ' + RESET + BGREEN + truncate(asciiSafe(path.basename(state.cwd) || state.cwd), 18) + RESET +
+      BOLD + BGREEN + ': ' + RESET + GREEN + asciiSafe(state.promptValue) + RESET + REV + ' ' + RESET +
+      DGREEN + '   ' + keyc('Enter') + ' create  .  empty + ' + keyc('Enter') + ' cancel' + RESET);
+  } else if (state.status) {
     let col = GREEN;
     if (state.statusKind === 'error') col = RED;
     else if (state.statusKind === 'ok') col = BGREEN;
@@ -506,7 +580,7 @@ function render() {
   const C = BBLUE + ' | ' + RESET;
   lines.push(sep);
   lines.push(BOLD + BGREEN + pad('MOVE', 7) + RESET + keyc('Up') + keyc('Dn') + GREEN + ' move bar' + RESET + C + keyc('->') + GREEN + ' open folder' + RESET + C + keyc('<-') + GREEN + ' back' + RESET + C + keyc('Tab') + GREEN + ' switch list' + RESET);
-  lines.push(BOLD + BGREEN + pad('DO', 7) + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' #agents' + RESET + C + keyc('Enter') + GREEN + ' launch' + RESET + C + keyc('g') + GREEN + ' push' + RESET + C + keyc('c') + GREEN + ' pull' + RESET + C + keyc('?') + GREEN + ' help' + RESET + C + keyc('q') + GREEN + ' quit' + RESET);
+  lines.push(BOLD + BGREEN + pad('DO', 7) + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' #agents' + RESET + C + keyc('Enter') + GREEN + ' launch' + RESET + C + keyc('n') + GREEN + ' new folder' + RESET + C + keyc('g') + GREEN + ' push' + RESET + C + keyc('c') + GREEN + ' pull' + RESET + C + keyc('?') + GREEN + ' help' + RESET + C + keyc('q') + GREEN + ' quit' + RESET);
   lines.push(BOLD + BGREEN + pad('WINDOW', 7) + RESET + BOLD + BBLUE + 'Alt+[ Alt+]' + RESET + GREEN + ' switch window' + RESET + C + keyc('Alt+a') + GREEN + ' add agent' + RESET + C + keyc('Ctrl+Alt+w') + GREEN + ' close' + RESET + C + keyc('Ctrl+g') + GREEN + ' lock' + RESET);
 
   // Fill the leftover vertical space with folder entries, then splice them under
@@ -570,15 +644,21 @@ function renderHelp(W) {
   L.push('   ' + g('Press a number ') + k('1') + g('-') + k('8') + g(' to choose how many agents, then press ') + k('Enter') + g('.'));
   L.push('   ' + g('They open in a new window (tab) that runs in the folder you have selected.'));
   L.push('   ' + g('Switch between windows with ') + k('Alt+[') + g(' and ') + k('Alt+]') + g('.'));
+  L.push('   ' + g('Add another Claude in the same window: ') + k('Alt+a') + g('.  Close the focused one: ') + k('Ctrl+Alt+w') + g('.'));
+  L.push('   ' + g('The green shortcut bar at the top of every agent window lists these too.'));
   L.push('');
-  L.push(h('4. GitHub sync  (keeps all your devices in step)'));
+  L.push(h('4. Making a new project folder'));
+  L.push('   ' + g('Press ') + k('n') + g(', type a name, and press ') + k('Enter') + g(' to create a folder inside the one you are'));
+  L.push('   ' + g('viewing now. Then press ') + k('Enter') + g(' on it to launch agents in your new project.'));
+  L.push('');
+  L.push(h('5. GitHub sync  (keeps all your devices in step)'));
   L.push('   ' + k('g') + g(' = ') + h('PUSH') + g(': uploads your committed work to GitHub.'));
   L.push('       ' + DGREEN + 'If another device already pushed newer work, yours is skipped, NOT overwritten.' + RESET);
   L.push('       ' + DGREEN + '(If that happens, press c to pull first, then g again.)' + RESET);
   L.push('   ' + k('c') + g(' = ') + h('PULL') + g(': downloads everything from GitHub and brings repos up to date.'));
   L.push('       ' + DGREEN + 'Your local commits and unsaved changes are never deleted.' + RESET);
   L.push('');
-  L.push(h('5. Quitting'));
+  L.push(h('6. Quitting'));
   L.push('   ' + k('q') + g(' closes this dashboard. Your agent windows keep running.'));
   L.push(sep);
   L.push(BOLD + BGREEN + 'Press any key to go back.' + RESET);
@@ -592,6 +672,14 @@ function redraw() { scanSubagents(); render(); }
 function act(name, ch) {
   // While the help overlay is up, ANY key just closes it (and does nothing else).
   if (state.showHelp) { state.showHelp = false; setStatus('', 'info'); redraw(); return; }
+  // While the new-folder text input is up, keys edit/commit/cancel it — nothing else.
+  if (state.prompt === 'newfolder') {
+    if (name === 'enter') { createFolder(state.promptValue); redraw(); return; }
+    if (name === 'backspace') { state.promptValue = state.promptValue.slice(0, -1); redraw(); return; }
+    if (name === 'cancel' || name === 'quit') { state.prompt = null; state.promptValue = ''; setStatus('New folder cancelled.', 'info'); redraw(); return; }
+    if (ch != null && ch >= ' ' && ch !== '\x7f') { if (state.promptValue.length < 64) state.promptValue += ch; redraw(); return; }
+    return;   // ignore arrows/tab while typing a name
+  }
   if (name === 'quit') { cleanupAndExit(0); return; }
   if (name === 'enter') { if (state.focus === 'dirs') launch(); else openInspector(); redraw(); return; }
   if (name === 'tab') {
@@ -615,6 +703,7 @@ function onPrintable(ch) {
   if (ch === '-' || ch === '_') { state.count = Math.max(1, state.count - 1); redraw(); return; }
   if (ch === 'c') { cloneAll(); redraw(); return; }
   if (ch === 'g') { gitPush(); redraw(); return; }
+  if (ch === 'n') { state.prompt = 'newfolder'; state.promptValue = ''; setStatus('', 'info'); redraw(); return; }
   if (ch === '?') { state.showHelp = true; redraw(); return; }
   if (ch === 'q') { cleanupAndExit(0); return; }
   if (ch === 'k') { act('up'); return; }
@@ -675,7 +764,8 @@ function decodeInput(buf) {
     if (c === 0x03) { events.push({ kind: 'quit' }); continue; }
     if (c === 0x0d || c === 0x0a) { events.push({ kind: 'enter' }); continue; }
     if (c === 0x09) { events.push({ kind: 'tab' }); continue; }
-    if (c < 0x20 || c === 0x7f) continue;          // ignore other control bytes
+    if (c === 0x7f || c === 0x08) { events.push({ kind: 'backspace' }); continue; }  // DEL / Ctrl+H
+    if (c < 0x20) continue;                         // ignore other control bytes
     events.push({ kind: 'char', ch: buf[i - 1] });
   }
   return { events, rest: buf.slice(i) };
@@ -686,6 +776,8 @@ function applyEvent(ev) {
   else if (ev.kind === 'enter') act('enter');
   else if (ev.kind === 'tab') act('tab');
   else if (ev.kind === 'quit') act('quit');
+  else if (ev.kind === 'backspace') act('backspace');
+  else if (ev.kind === 'cancel') act('cancel');
   else if (ev.kind === 'char') act(null, ev.ch);
 }
 let dispatchEvent = applyEvent;                    // swappable so tests can observe without side effects
@@ -716,9 +808,14 @@ function feed(chunk) {
   inbuf = rest;
   for (const ev of events) dispatchEvent(ev);
   // A lingering, incomplete escape sequence (rare): drop it after a beat so its
-  // bytes can never later be re-read as printable keys.
+  // bytes can never later be re-read as printable keys. A LONE Esc that lingers is
+  // the physical Esc key — use it to cancel the new-folder prompt if one is open.
   if (inbuf.length && inbuf.charCodeAt(0) === 0x1b) {
-    escFlushTimer = setTimeout(() => { inbuf = ''; escFlushTimer = null; }, 60);
+    const loneEsc = inbuf.length === 1;
+    escFlushTimer = setTimeout(() => {
+      inbuf = ''; escFlushTimer = null;
+      if (loneEsc && state.prompt) { try { dispatchEvent({ kind: 'cancel' }); } catch { /* */ } }
+    }, 60);
   }
 }
 
@@ -757,6 +854,10 @@ function main() {
   // System stats refresh on the 1s timer only (not on keypress) so values are
   // stable and holding a key can't make CPU/MEM jitter.
   timer = setInterval(tick, 1000);
+  // The control center is now on screen; pull the latest from GitHub silently in
+  // the background (no window, never blocks) so opening it is instant AND keeps
+  // every repo current. Replaces the old visible startup clone window.
+  try { startBackgroundSync(); } catch { /* never let sync break the UI */ }
 }
 
 // Run the TUI only when launched directly (`node home.mjs`); stay importable so
