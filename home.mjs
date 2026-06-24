@@ -503,8 +503,10 @@ function render() {
     GREEN + ' Claude agent' + (state.count === 1 ? '' : 's') + ' in: ' + RESET + BGREEN + truncate(asciiSafe(launchName), 22) + RESET);
   lines.push('  ' + GREEN + 'Step 1: press a number ' + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' = how many' + RESET +
     DGREEN + ' (now: ' + RESET + BOLD + BGREEN + state.count + RESET + DGREEN + ')' + RESET + GREEN + '    Step 2: press ' + RESET + keyc('Enter'));
-  lines.push('  ' + DGREEN + 'inside a tab: ' + RESET + keyc('Alt+a') + GREEN + ' add another' + RESET + DGREEN + ' . ' + RESET +
-    keyc('Alt+[') + keyc('Alt+]') + GREEN + ' switch' + RESET + DGREEN + ' . ' + RESET + keyc('Ctrl+Alt+w') + GREEN + ' close' + RESET);
+  lines.push('  ' + DGREEN + 'in a tab, switch: ' + RESET + keyc('Alt+arrows') + GREEN + ' between agents' + RESET + DGREEN + ' . ' + RESET +
+    keyc('Alt+[') + keyc('Alt+]') + GREEN + ' between tabs' + RESET + DGREEN + '  (focused agent is highlighted)' + RESET);
+  lines.push('  ' + DGREEN + 'in a tab, manage: ' + RESET + keyc('Alt+a') + GREEN + ' add' + RESET + DGREEN + ' . ' + RESET +
+    keyc('Ctrl+Alt+w') + GREEN + ' close agent' + RESET + DGREEN + ' . ' + RESET + keyc('Ctrl+Alt+q') + GREEN + ' close whole tab' + RESET);
   lines.push(sep);
 
   // Sync — the GitHub buttons. Plain-English, with the safety promise spelled out.
@@ -581,7 +583,7 @@ function render() {
   lines.push(sep);
   lines.push(BOLD + BGREEN + pad('MOVE', 7) + RESET + keyc('Up') + keyc('Dn') + GREEN + ' move bar' + RESET + C + keyc('->') + GREEN + ' open folder' + RESET + C + keyc('<-') + GREEN + ' back' + RESET + C + keyc('Tab') + GREEN + ' switch list' + RESET);
   lines.push(BOLD + BGREEN + pad('DO', 7) + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' #agents' + RESET + C + keyc('Enter') + GREEN + ' launch' + RESET + C + keyc('n') + GREEN + ' new folder' + RESET + C + keyc('g') + GREEN + ' push' + RESET + C + keyc('c') + GREEN + ' pull' + RESET + C + keyc('?') + GREEN + ' help' + RESET + C + keyc('q') + GREEN + ' quit' + RESET);
-  lines.push(BOLD + BGREEN + pad('WINDOW', 7) + RESET + BOLD + BBLUE + 'Alt+[ Alt+]' + RESET + GREEN + ' switch window' + RESET + C + keyc('Alt+a') + GREEN + ' add agent' + RESET + C + keyc('Ctrl+Alt+w') + GREEN + ' close' + RESET + C + keyc('Ctrl+g') + GREEN + ' lock' + RESET);
+  lines.push(BOLD + BGREEN + pad('WINDOW', 7) + RESET + keyc('Alt+arrows') + GREEN + ' agent' + RESET + C + keyc('Alt+[') + keyc('Alt+]') + GREEN + ' tab' + RESET + C + keyc('Ctrl+Alt+w') + GREEN + ' close agent' + RESET + C + keyc('Ctrl+Alt+q') + GREEN + ' close tab' + RESET);
 
   // Fill the leftover vertical space with folder entries, then splice them under
   // the FOLDERS header. Measuring the rest of the dashboard (instead of a fixed
@@ -640,11 +642,13 @@ function renderHelp(W) {
   L.push('   ' + k('Right') + g(' (or ') + k('l') + g(')   open the highlighted folder (go INTO it)'));
   L.push('   ' + k('Left') + g('  (or ') + k('h') + g(')   go back OUT to the parent folder'));
   L.push('');
-  L.push(h('3. Launching Claude agents'));
+  L.push(h('3. Launching and managing Claude agents'));
   L.push('   ' + g('Press a number ') + k('1') + g('-') + k('8') + g(' to choose how many agents, then press ') + k('Enter') + g('.'));
   L.push('   ' + g('They open in a new window (tab) that runs in the folder you have selected.'));
-  L.push('   ' + g('Switch between windows with ') + k('Alt+[') + g(' and ') + k('Alt+]') + g('.'));
-  L.push('   ' + g('Add another Claude in the same window: ') + k('Alt+a') + g('.  Close the focused one: ') + k('Ctrl+Alt+w') + g('.'));
+  L.push('   ' + g('Each agent has a titled border ("Claude 1", "Claude 2", ...); the one you are'));
+  L.push('   ' + g('typing into is highlighted. Move between them with ') + k('Alt+Arrow keys') + g('.'));
+  L.push('   ' + g('Switch between tabs (windows) with ') + k('Alt+[') + g(' and ') + k('Alt+]') + g('.'));
+  L.push('   ' + g('Add another Claude: ') + k('Alt+a') + g('.   Close one agent: ') + k('Ctrl+Alt+w') + g('.   Close the whole tab: ') + k('Ctrl+Alt+q') + g('.'));
   L.push('   ' + g('The green shortcut bar at the top of every agent window lists these too.'));
   L.push('');
   L.push(h('4. Making a new project folder'));

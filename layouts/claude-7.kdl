@@ -10,8 +10,8 @@ layout {
                 args "{{APP}}/agentbar.mjs"
             }
             pane split_direction="horizontal" {
-                pane split_direction="vertical" { pane command="claude"; pane command="claude"; pane command="claude"; pane command="claude"; }
-                pane split_direction="vertical" { pane command="claude"; pane command="claude"; pane command="claude"; }
+                pane split_direction="vertical" { pane command="claude" name="Claude 1"; pane command="claude" name="Claude 2"; pane command="claude" name="Claude 3"; pane command="claude" name="Claude 4"; }
+                pane split_direction="vertical" { pane command="claude" name="Claude 5"; pane command="claude" name="Claude 6"; pane command="claude" name="Claude 7"; }
             }
         }
     }

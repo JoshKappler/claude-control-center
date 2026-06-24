@@ -19,11 +19,12 @@ function cols() { return (process.stdout.columns && process.stdout.columns > 0) 
 function groups() {
   return [
     'SHORTCUTS',
-    'Alt+a = add another Claude',
-    'Alt+[ / Alt+] = switch window',
-    'Ctrl+Alt+w = close this one',
+    'Alt+Arrows = switch agent',
+    'Alt+[ / Alt+] = switch tab',
+    'Alt+a = add agent',
+    'Ctrl+Alt+w = close agent',
+    'Ctrl+Alt+q = close tab',
     'Ctrl+g = lock keys to Claude',
-    'click the Home tab to go back',
   ];
 }
 

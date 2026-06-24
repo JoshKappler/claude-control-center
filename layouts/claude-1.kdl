@@ -10,7 +10,7 @@ layout {
             pane size=1 borderless=true command="node" {
                 args "{{APP}}/agentbar.mjs"
             }
-            pane command="claude"
+            pane command="claude" name="Claude 1"
         }
     }
 }
