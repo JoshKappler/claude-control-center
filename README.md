@@ -28,14 +28,28 @@ The dashboard always shows a plain-English guide at the top, and a bright
 | `n` | **New folder** — type a name + Enter to create a folder inside the one you're viewing (empty + Enter cancels) |
 | `g` | **PUSH** — upload your committed work to GitHub (never overwrites newer cloud changes) |
 | `c` | **PULL** — download everything from GitHub (never deletes your local work) |
-
-Inside an agent window (tab), the green **shortcut bar** pinned at the top lists the
-keys for managing the Claude instances in it: `Alt+a` add another, `Alt+[` / `Alt+]`
-switch windows, `Ctrl+Alt+w` close the focused one, `Ctrl+g` lock keys to Claude.
-Click the **Home** tab (leftmost) to come back to the dashboard.
 | `Tab` | Switch the arrows to the Subagents list (only when something is there) |
 | `?` | Full-screen plain-English help |
 | `q` / `Ctrl+C` | Quit the dashboard (running agents keep going) |
+
+### Inside an agent window (tab)
+
+Each launched tab holds 1–8 Claude instances, each with a titled border
+(`Claude 1`, `Claude 2`, …); the one you're typing into is **highlighted**, so you
+always know which agent has focus. The green **shortcut bar** pinned at the top of
+every tab lists the keys:
+
+| Key | What it does |
+| --- | --- |
+| `Alt`+Arrows | Switch which agent is focused (move between the Claude panes) |
+| `Alt+[` / `Alt+]` | Switch between tabs (windows) |
+| `Alt+a` | Add another Claude agent to this tab |
+| `Ctrl+Alt+w` | Close the focused agent |
+| `Ctrl+Alt+q` | Close the whole tab (all its agents at once) |
+| `Ctrl+g` | Lock keys straight to Claude (so Zellij won't intercept shortcuts) |
+
+Click the **Home** tab (leftmost) to come back to the dashboard. Casual navigation
+never closes an agent — closing is always a deliberate `Ctrl+Alt+w` / `Ctrl+Alt+q`.
 
 If a list ever looks "dead", the arrows are simply on the *other* list — the
 focus bar tells you which, and the dashboard now refuses to strand the arrows on
