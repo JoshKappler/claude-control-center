@@ -44,8 +44,8 @@ The dashboard always shows a plain-English guide at the top, and a bright
 
 Each launched tab holds 1–8 Claude instances, each with a titled border
 (`Claude 1`, `Claude 2`, …); the one you're typing into is **highlighted**, so you
-always know which agent has focus. The green **shortcut bar** pinned at the top of
-every tab lists the keys:
+always know which agent has focus. The green **shortcut bar** pinned at the
+**bottom** of every tab lists the keys:
 
 | Key | What it does |
 | --- | --- |
@@ -55,9 +55,19 @@ every tab lists the keys:
 | `Ctrl+Alt+w` | Close the focused agent |
 | `Ctrl+Alt+q` | Close the whole tab (all its agents at once) |
 | `Ctrl+g` | Lock keys straight to Claude (so Zellij won't intercept shortcuts) |
+| `Alt+i` | Open the subagent monitor (a live status table — what each subagent is doing; not its transcript) |
+
+> The advertised text for all of these shortcuts is generated from a single
+> module, [`shortcuts.mjs`](shortcuts.mjs) — the bottom strip and the dashboard
+> cheatsheet both read from it, so they can't drift apart. The actual key
+> **bindings** live in the `dotfiles` repo's `~/.config/zellij/config.kdl`; keep
+> that file's keybinds in sync with `shortcuts.mjs`.
 
 Click the **Home** tab (leftmost) to come back to the dashboard. Casual navigation
 never closes an agent — closing is always a deliberate `Ctrl+Alt+w` / `Ctrl+Alt+q`.
+Zellij's default mode keys (`Ctrl+h/p/n/t/s/o/b`) are unbound, so ordinary terminal
+keys like **Ctrl+Backspace** (delete word) pass straight through to Claude instead
+of opening a Zellij overlay.
 
 If a list ever looks "dead", the arrows are simply on the *other* list — the
 focus bar tells you which, and the dashboard now refuses to strand the arrows on
@@ -107,14 +117,16 @@ Watch it: `tail -f ~/.claude/state/cc/sync.log`. Each line is one tick, e.g.
 
 | File | Role |
 | --- | --- |
-| `home.mjs` | **Home TUI** — folder navigator, agent-count picker, launch, GitHub push/pull, live 5h/Weekly limit gauges, subagents list + inspector, help overlay. |
+| `home.mjs` | **Home TUI** — folder navigator, agent-count picker, launch, GitHub push/pull, live 5h/Weekly limit gauges, subagents list + monitor, help overlay. |
+| `shortcuts.mjs` | **Single source of truth** for advertised shortcut text. `agentbar.mjs` and `home.mjs` both render from it. |
 | `statusline.mjs` | statusLine for `~/.claude/settings.json`. Prints `model · ctx% · task` and writes `agents/<sessionId>.json`. |
-| `inspector.mjs` | Live subagent inspector, opened in a Zellij floating pane. |
+| `inspector.mjs` | Live subagent **monitor** — a 1s-refresh status table (type/label/last tool/elapsed) per subagent, opened in a Zellij floating pane. Shows metadata, not transcripts. |
 | `git-push-all.mjs` | `node git-push-all.mjs <root>` → pushes repos under `<root>` (excludes `dotfiles`), prints JSON. Never force-pushes. |
 | `clone-all.mjs` | `node clone-all.mjs <root>` → clones missing + `--ff-only` pulls all your GitHub repos. Finds clones **one level deep too** (e.g. `other/algora`) and updates them in place instead of re-cloning a top-level duplicate. Never discards local work. |
 | `sync-daemon.mjs` | **Always-on background sync.** Self-updates this repo (`git pull --ff-only`), then runs `clone-all.mjs` over the projects folder it lives in. Run on a schedule by the macOS LaunchAgent. Logs to `~/.claude/state/cc/sync.log`. |
 | `macos/install-sync-agent.sh` | Installs `sync-daemon.mjs` as a LaunchAgent that runs at login and every 10 min. `macos/uninstall-sync-agent.sh` removes it. |
-| `agentbar.mjs` | One-line shortcut bar shown above each agent tab. |
+| `agentbar.mjs` | One-line shortcut bar pinned at the **bottom** of each agent tab. Renders from `shortcuts.mjs`; essential keys (close agent/window, lock) never truncate. |
+| `separator.mjs` | One-row borderless pane that renders as a black gap, separating the green chevron tab-bar from the content below. |
 | `hooks/session-register.mjs` | SessionStart/SessionEnd hook: maintains `panes/<id>` and cleans up state. |
 | `hooks/subagent-track.mjs` | Subagent/tool hooks: maintains `subagents/<parent>/<agentId>.json`. |
 | `layouts/claude-1..8.kdl` | Zellij agent-tab layouts. Reference sibling scripts with the `{{APP}}` token, which `home.mjs` renders to this folder's path at launch (fully portable). |
