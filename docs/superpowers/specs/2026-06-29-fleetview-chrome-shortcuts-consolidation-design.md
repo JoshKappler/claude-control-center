@@ -16,6 +16,8 @@ systems with band-aids on top." Concrete symptoms reported by the owner:
 4. A `base` chevron and a `scroll: 0/1` indicator appear with no explanation.
 5. No visual separator between the chevron tab bar and the strip beneath — one
    green blob.
+6. **Ctrl+Backspace** (delete-word, as in any terminal) "exits the window and
+   pulls up some other control thing" instead of deleting a word.
 
 ## Root cause
 
@@ -28,6 +30,10 @@ bindings, and with a stale running session. Compounding factors:
 - The bottom status bar / `base` mode / resize tips come from Zellij's
   `zellij:status-bar` plugin, which the **current** deployed config already removed.
   The owner still sees them because the running session is stale.
+- **Ctrl+Backspace emits `Ctrl+H` (`0x08`)**, and Zellij's default keybind for
+  `Ctrl+h` is "enter Move mode" — the unexplained overlay. The config never unbinds
+  it. Zellij's other default mode-entry keys (`Ctrl+p/n/t/s/o/b`) collide with
+  common terminal/Claude keys the same way, the same general class of bug.
 - `agentbar.mjs` lists `Ctrl+Alt+w` last in an ordered list that is truncated on
   narrow panes (`agentbar.mjs:36-37`), so close-agent falls off the edge.
 - Four stale duplicate copies of the layouts exist (this repo, two chezmoi
@@ -117,10 +123,20 @@ A3. Delete the dead duplicate tree
     + `claude-N` layouts nothing launches).
 A4. Add the "text of record" comment in `config.kdl.tmpl` keybinds block pointing
     at this repo's `shortcuts.mjs`.
-A5. `chezmoi apply`, then close & reopen the control center so the stale session is
+A5. **Strip Zellij's default mode-entry keybinds.** In `config.kdl.tmpl`, unbind
+    `Ctrl+h` (Move mode — the Ctrl+Backspace culprit) and the other unused default
+    mode switches `Ctrl+p` `Ctrl+n` `Ctrl+t` `Ctrl+s` `Ctrl+o` `Ctrl+b`, so the
+    only Zellij modes reachable are `normal` and `locked`. This fixes Ctrl+Backspace
+    (Ctrl+H now passes through to Claude) and removes the whole class of "I hit a
+    Ctrl key and a Zellij overlay appeared." Keep the intentional `Alt+` workflow
+    bindings and `Ctrl+g` lock. Mouse scroll (`mouse_mode true`) still covers
+    scrollback, so dropping `Ctrl+s` scroll mode is acceptable. Use
+    `unbind "Ctrl h" "Ctrl p" "Ctrl n" "Ctrl t" "Ctrl s" "Ctrl o" "Ctrl b"` in the
+    `shared_except "locked"` block (locked mode already passes everything through).
+A6. `chezmoi apply`, then close & reopen the control center so the stale session is
     replaced (the AHK launcher kills the session on window close;
     `on_force_close "quit"` + `session_serialization false` guarantee a fresh
-    start). This is what makes symptoms 1/3/4 disappear.
+    start). This is what makes symptoms 1/3/4/6 disappear.
 
 ## Track B — App (this repo)
 
@@ -151,7 +167,9 @@ B6. Inspector labeling: in `home.mjs` and any advertised text, call it the
 - Manual: `chezmoi apply`, reopen control center, confirm: (a) black separator under
   the chevrons, (b) no bottom status bar / no `base` / no resize tips, (c) bottom
   hint strip shows `close agent` + `lock` even with 8 agents in narrow columns,
-  (d) `Alt+[`/`Alt+]`/`Alt+a`/`Ctrl+Alt+w` actually work in the fresh session.
+  (d) `Alt+[`/`Alt+]`/`Alt+a`/`Ctrl+Alt+w` actually work in the fresh session,
+  (e) **Ctrl+Backspace deletes a word in a Claude pane** (no Move-mode overlay),
+  and a stray `Ctrl+p`/`Ctrl+n`/`Ctrl+t`/`Ctrl+s` no longer opens a Zellij mode.
 
 ## Non-goals
 
