@@ -117,6 +117,8 @@ Watch it: `tail -f ~/.claude/state/cc/sync.log`. Each line is one tick, e.g.
 
 | File | Role |
 | --- | --- |
+| `install.mjs` | **Deploys `workspace/` config to the OS paths** each tool reads from (cross-platform, with `.pre-install.bak` backups). Replaces chezmoi. Run `node install.mjs` after `git pull` on any machine. |
+| `workspace/` | **All machine config in one place** (zellij, WezTerm, Claude global settings/CLAUDE.md/commands, helix, espanso, hammerspoon, Windows launcher). See [`workspace/README.md`](workspace/README.md). |
 | `home.mjs` | **Home TUI** — folder navigator, agent-count picker, launch, GitHub push/pull, live 5h/Weekly limit gauges, subagents list + monitor, help overlay. |
 | `shortcuts.mjs` | **Single source of truth** for advertised shortcut text. `agentbar.mjs` and `home.mjs` both render from it. |
 | `statusline.mjs` | statusLine for `~/.claude/settings.json`. Prints `model · ctx% · task` and writes `agents/<sessionId>.json`. |
@@ -130,19 +132,27 @@ Watch it: `tail -f ~/.claude/state/cc/sync.log`. Each line is one tick, e.g.
 | `hooks/session-register.mjs` | SessionStart/SessionEnd hook: maintains `panes/<id>` and cleans up state. |
 | `hooks/subagent-track.mjs` | Subagent/tool hooks: maintains `subagents/<parent>/<agentId>.json`. |
 | `layouts/claude-1..8.kdl` | Zellij agent-tab layouts. Reference sibling scripts with the `{{APP}}` token, which `home.mjs` renders to this folder's path at launch (fully portable). |
-| `layouts/cc-default.kdl` | Reference copy of the session layout. The live one is deployed by the dotfiles repo to `~/.config/zellij/layouts/`. |
+| `workspace/zellij/layouts/cc-default.kdl` | The Home-tab session layout; `install.mjs` deploys it to `~/.config/zellij/layouts/`. |
 
 ## How it is wired into the machine
 
-The app **code** lives here. The thin **wiring** that makes the OS launch it and
-makes Claude report into it lives in the `dotfiles` repo (it installs into hidden
-system folders), and points back at this folder:
+Everything lives in **this one repo** now. The machine config (zellij, WezTerm,
+Claude global settings, helix, espanso, the OS launcher) is in [`workspace/`](workspace/),
+and **`install.mjs`** copies each file to the OS path its tool reads from. There is
+no separate dotfiles repo and no chezmoi any more.
 
-- `~/.config/zellij/layouts/cc-default.kdl` → runs `home.mjs` from here.
-- `~/.config/zellij/config.kdl` (`Alt+i`) → runs `inspector.mjs` from here.
-- `~/.claude/settings.json` → runs `statusline.mjs` + the `hooks/` from the stable
-  `~/.local/share/claude-cc/` copy (these are always-on, so they run from a
-  non-OneDrive path; identical source is kept here for syncing).
+Sync a machine in two commands:
+
+```sh
+git pull                # this repo
+node install.mjs        # deploy workspace/ config to the OS paths (Windows or macOS)
+```
+
+`install.mjs` self-locates, fills in per-OS paths/tokens, and backs up anything it
+overwrites to `<file>.pre-install.bak`. See [`workspace/README.md`](workspace/README.md)
+for the full map of what goes where. The deployed config points back at this folder
+(e.g. zellij runs `home.mjs`/`inspector.mjs` from here; `~/.claude/settings.json`
+runs `statusline.mjs` + `hooks/` via `~/.local/share/claude-cc/`).
 
 ## Shared state
 
