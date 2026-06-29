@@ -25,6 +25,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { DASHBOARD, IN_TAB, fitGroups } from './shortcuts.mjs';
 
 // ---------- shared state ----------
 const HOME = os.homedir();
@@ -487,8 +488,8 @@ function openInspector() {
   let res;
   try { res = spawnSync('zellij', args, { encoding: 'utf8' }); }
   catch (e) { setStatus('Inspector failed: ' + asciiSafe(e && e.message), 'error'); return; }
-  if (res.error || res.status !== 0) { setStatus('Could not open inspector', 'error'); return; }
-  setStatus('Opened inspector for ' + truncate(asciiSafe(p.parentId), 16), 'ok');
+  if (res.error || res.status !== 0) { setStatus('Could not open subagent monitor', 'error'); return; }
+  setStatus('Opened subagent monitor for ' + truncate(asciiSafe(p.parentId), 16), 'ok');
 }
 
 // ---------- rendering ----------
@@ -569,8 +570,8 @@ function render() {
 
   // Subagents
   const subFocused = state.focus === 'subagents';
-  if (subFocused) lines.push(REV + BOLD + BGREEN + pad(' SUBAGENTS  - arrow keys are here; Enter inspects, Tab back to Folders', W) + RESET);
-  else lines.push('  ' + hdr('SUBAGENTS') + (state.subParents.length ? DGREEN + '   (Tab to inspect)' + RESET : ''));
+  if (subFocused) lines.push(REV + BOLD + BGREEN + pad(' SUBAGENTS  - arrow keys are here; Enter opens the monitor, Tab back to Folders', W) + RESET);
+  else lines.push('  ' + hdr('SUBAGENTS') + (state.subParents.length ? DGREEN + '   (Enter to monitor)' + RESET : ''));
   if (state.subParents.length === 0) {
     lines.push('    ' + DGREEN + '(none running -- this list fills only when an agent spawns subagents)' + RESET);
   } else {
@@ -609,13 +610,18 @@ function render() {
     lines.push(col + truncate(asciiSafe(state.status), W - 1) + RESET);
   } else lines.push('');
 
-  // Cheatsheet — the one key reference. Blue keys + blue | separators (separation
-  // matters here); green labels/descriptions. Press ? for the full plain-English help.
+  // Cheatsheet — generated from shortcuts.mjs (the single source of truth) so it can
+  // never drift from the in-tab strip. Blue keys + blue | separators; green labels.
+  // Press ? for the full plain-English help.
   const C = BBLUE + ' | ' + RESET;
+  const renderItems = (items) => items.map((it) => keyc(it.keys) + GREEN + ' ' + it.label + RESET).join(C);
   lines.push(sep);
-  lines.push(BOLD + BGREEN + pad('MOVE', 7) + RESET + keyc('Up') + keyc('Dn') + GREEN + ' move bar' + RESET + C + keyc('->') + GREEN + ' open folder' + RESET + C + keyc('<-') + GREEN + ' back' + RESET + C + keyc('Tab') + GREEN + ' switch list' + RESET);
-  lines.push(BOLD + BGREEN + pad('DO', 7) + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' #agents' + RESET + C + keyc('Enter') + GREEN + ' launch' + RESET + C + keyc('n') + GREEN + ' new folder' + RESET + C + keyc('g') + GREEN + ' push' + RESET + C + keyc('c') + GREEN + ' pull' + RESET + C + keyc('?') + GREEN + ' help' + RESET + C + keyc('q') + GREEN + ' quit' + RESET);
-  lines.push(BOLD + BGREEN + pad('WINDOW', 7) + RESET + keyc('Alt+arrows') + GREEN + ' agent' + RESET + C + keyc('Alt+[') + keyc('Alt+]') + GREEN + ' tab' + RESET + C + keyc('Ctrl+Alt+w') + GREEN + ' close agent' + RESET + C + keyc('Ctrl+Alt+q') + GREEN + ' close tab' + RESET);
+  for (const grp of DASHBOARD) {
+    lines.push(BOLD + BGREEN + pad(grp.row, 7) + RESET + renderItems(grp.items));
+  }
+  // WINDOW row = the in-tab keys; width-fit (essentials kept) so it never wraps.
+  const winFit = fitGroups(IN_TAB, W - 9, ' | ', (g) => '[' + g.keys + '] ' + g.label);
+  lines.push(BOLD + BGREEN + pad('WINDOW', 7) + RESET + renderItems(winFit));
 
   // Fill the leftover vertical space with folder entries, then splice them under
   // the FOLDERS header. Measuring the rest of the dashboard (instead of a fixed
@@ -681,7 +687,8 @@ function renderHelp(W) {
   L.push('   ' + g('typing into is highlighted. Move between them with ') + k('Alt+Arrow keys') + g('.'));
   L.push('   ' + g('Switch between tabs (windows) with ') + k('Alt+[') + g(' and ') + k('Alt+]') + g('.'));
   L.push('   ' + g('Add another Claude: ') + k('Alt+a') + g('.   Close one agent: ') + k('Ctrl+Alt+w') + g('.   Close the whole tab: ') + k('Ctrl+Alt+q') + g('.'));
-  L.push('   ' + g('The green shortcut bar at the top of every agent window lists these too.'));
+  L.push('   ' + g('Locked out of Claude by a Zellij shortcut? ') + k('Ctrl+g') + g(' locks all keys to Claude (press it again to unlock).'));
+  L.push('   ' + g('The green shortcut bar at the BOTTOM of every agent window lists these too.'));
   L.push('');
   L.push(h('4. Making a new project folder'));
   L.push('   ' + g('Press ') + k('n') + g(', type a name, and press ') + k('Enter') + g(' to create a folder inside the one you are'));
