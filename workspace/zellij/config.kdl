@@ -1,0 +1,102 @@
+// ~/.config/zellij/config.kdl  — deployed by `node install.mjs` from this repo.
+// Script paths below are rewritten to this repo's absolute location at install time.
+theme "homebrew"
+// Pane frames ON: each agent gets a thin titled border ("Claude 1", "Claude 2",
+// ...) and the FOCUSED agent's border is highlighted, so you always see which
+// instance your keystrokes go to. Home and the hint/tab bars stay borderless.
+pane_frames true
+// Mouse ON: the pointer must work (click to focus a pane, click the Home tab to
+// jump back, drag a border to resize). Turning it off had stranded the cursor as
+// a text selector. The confusing "ALT-click group" hint is avoided by using the
+// plain tab-bar (not the compact/status bar) for the top row instead.
+mouse_mode true
+default_layout "cc-default"   // the control center's Home tab; `zellij attach -c claude-cc` creates the session with this
+show_startup_tips false
+copy_on_select true
+// Close the WHOLE session (and every CLI/agent pane in it) when the window is
+// closed, instead of leaving it running detached in the background. No lingering
+// claude-cc session to clean up; the next launch always starts fresh.
+on_force_close "quit"
+// Don't persist/resurrect dead sessions to disk either.
+session_serialization false
+
+// Green-on-black phosphor theme to match WezTerm's Homebrew scheme.
+themes {
+    homebrew {
+        fg "#33FF33"
+        bg "#000000"
+        black "#000000"
+        red "#00CC00"
+        green "#33FF33"
+        yellow "#AAFF00"
+        blue "#00CC66"
+        magenta "#33FFAA"
+        cyan "#00FFCC"
+        white "#CCFFCC"
+        orange "#88FF00"
+    }
+}
+
+keybinds {
+    // Ctrl+g toggles LOCKED mode, which passes every key straight to Claude so
+    // Zellij never eats its shortcuts. The hint bar shows how to leave locked mode.
+    normal {
+        bind "Ctrl g" { SwitchToMode "locked"; }
+    }
+    locked {
+        bind "Ctrl g" { SwitchToMode "normal"; }
+    }
+
+    // --- Control Center actions (active in every mode except locked) ---
+    shared_except "locked" {
+        // Alt+a: add another Claude agent in this tab (new pane running `claude`).
+        bind "Alt a" { Run "claude"; }
+        // Alt+i: open the subagent monitor for this window as a floating overlay.
+        bind "Alt i" { Run "node" "{{APP}}/inspector.mjs" { floating true; }; }
+        // Ctrl+Alt+w: DELIBERATE manual close of the focused agent. Closing is the
+        // only way an agent dies — casual tab/pane navigation never can (see below).
+        bind "Ctrl Alt w" { CloseFocus; }
+        // Switch between agent windows (tabs). Repurpose Alt+[ / Alt+] — zellij's
+        // default swap-layout keys, which we don't use — into prev/next tab, so
+        // the brackets you used to see now actually move between windows.
+        bind "Alt [" { GoToPreviousTab; }
+        bind "Alt ]" { GoToNextTab; }
+        // Alt+Arrows: move focus between the Claude agents INSIDE this tab. The
+        // highlighted border shows which one is active; stays within the tab.
+        bind "Alt Left"  { MoveFocus "Left"; }
+        bind "Alt Right" { MoveFocus "Right"; }
+        bind "Alt Up"    { MoveFocus "Up"; }
+        bind "Alt Down"  { MoveFocus "Down"; }
+        // Ctrl+Alt+q: deliberately close this WHOLE tab (all of its agents at
+        // once). Ctrl+Alt+w above closes only the single focused agent.
+        bind "Ctrl Alt q" { CloseTab; }
+        // No-kill guard: disable global Quit so one keystroke can't nuke every agent.
+        unbind "Ctrl q"
+        // Stop Zellij from eating ordinary terminal/Claude keys and popping up mode
+        // overlays. Ctrl+Backspace (delete word) emits Ctrl+H, which by DEFAULT
+        // opens Zellij's Move mode — that was the unexplained overlay. Unbind it and
+        // the other default mode-entry keys we don't use, so they pass straight
+        // through to Claude. Only `normal` and `locked` modes remain reachable; the
+        // intentional Alt+ workflow and Ctrl+g lock are untouched. Mouse scroll
+        // still covers scrollback, so dropping Ctrl+s scroll mode is fine.
+        unbind "Ctrl h"
+        unbind "Ctrl p"
+        unbind "Ctrl n"
+        unbind "Ctrl t"
+        unbind "Ctrl s"
+        unbind "Ctrl o"
+        unbind "Ctrl b"
+    }
+
+    // No-kill guard: strip the casual close-pane / close-tab keys from every mode
+    // that bound them by default, so switching/adding/backtracking can't kill agents.
+    pane {
+        unbind "x"
+    }
+    tab {
+        unbind "x"
+    }
+    tmux {
+        unbind "x"
+    }
+}
