@@ -1,20 +1,19 @@
-// 4 Claude agents - 4 narrow vertical columns.
+// 4 Claude agents - 4 narrow vertical columns. Shortcut strip at the bottom.
 layout {
     default_tab_template {
         pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
+        pane size=1 borderless=true command="node" { args "{{APP}}/separator.mjs" }
         children
     }
     tab {
         pane split_direction="horizontal" {
-            pane size=1 borderless=true command="node" {
-                args "{{APP}}/agentbar.mjs"
-            }
-            pane split_direction="vertical" {
-                pane command="claude" name="Claude 1"
-                pane command="claude" name="Claude 2"
-                pane command="claude" name="Claude 3"
-                pane command="claude" name="Claude 4"
-            }
+                pane split_direction="vertical" {
+                    pane command="claude" name="Claude 1"
+                    pane command="claude" name="Claude 2"
+                    pane command="claude" name="Claude 3"
+                    pane command="claude" name="Claude 4"
+                }
+                pane size=1 borderless=true command="node" { args "{{APP}}/agentbar.mjs" }
         }
     }
 }
