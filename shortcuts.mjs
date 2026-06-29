@@ -38,11 +38,11 @@ export const DASHBOARD = [
 ];
 
 // Pick the groups that fit in `width` columns. Always keep essential ones; drop
-// non-essential from the END first (least important last). Each rendered group is
-// `keys + ' = ' + label`, joined by `sep`. Pure + deterministic (unit-testable).
-export function fitGroups(items, width, sep = '   .   ') {
-  const text = (g) => g.keys + ' = ' + g.label;
-  const widthOf = (gs) => gs.map(text).join(sep).length;
+// non-essential from the END first (least important last). Each group is rendered
+// by `textFn` (default `keys = label`) and joined by `sep`. Pure + deterministic
+// (unit-testable).
+export function fitGroups(items, width, sep = '   .   ', textFn = (g) => g.keys + ' = ' + g.label) {
+  const widthOf = (gs) => gs.map(textFn).join(sep).length;
   let chosen = items.slice();
   while (widthOf(chosen) > width && chosen.some((g) => !g.essential)) {
     let idx = -1;
