@@ -2,19 +2,14 @@
 // Deployed by `node install.mjs`; script paths are rewritten to this repo's path.
 // `default_layout "cc-default"` resolves it by name; the launcher creates the
 // session via `zellij attach -c claude-cc`.
+//
+// NO tab-bar on Home: the built-in zellij tab-bar plugin hard-codes the session
+// name ("Zellij (claude-cc)") and the swap-layout name ("BASE") with no option to
+// hide them, and a custom status plugin (zjstatus) would break the zero-dep rule.
+// Home doesn't need a tab strip anyway — you ARE home; the dashboard names itself.
+// Switch to your agent windows with Alt+] / Alt+H. Agent tabs keep their tab strip
+// (seeing the open windows there is useful) — see home.mjs genLayout().
 layout {
-    default_tab_template {
-        // Plain tab-bar = just the tab strip (which window you're on). It does NOT
-        // show the "ALT-click group" mouse hint that the compact/status bar does,
-        // so the mouse can stay on without that clutter.
-        pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
-        // Hint row: separates the green chevron tab-bar from the content AND tells
-        // you the one key (Alt+S) that reveals every shortcut for this page.
-        pane size=1 borderless=true command="node" {
-            args "{{APP}}/hintbar.mjs"
-        }
-        children
-    }
     tab name="Home" focus=true {
         // borderless: keep the dashboard frameless even though pane_frames is on
         // (frames are for the agent tabs, to show which Claude is focused).

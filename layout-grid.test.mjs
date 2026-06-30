@@ -52,8 +52,9 @@ for (let n = 1; n <= 8; n++) {
   const kdl = genLayout(n, '/x'); // window read from process.stdout (defaults are fine here)
   const agents = (kdl.match(/command="claude"/g) || []).length;
   check(`genLayout(${n}) emits ${n} claude panes`, agents === n);
-  check(`genLayout(${n}) puts the hintbar row at the top`, kdl.includes('/x/hintbar.mjs'));
-  check(`genLayout(${n}) has no bottom shortcut strip (removed)`,
+  check(`genLayout(${n}) includes the tab strip + a subtle hintbar`,
+    kdl.includes('zellij:tab-bar') && kdl.includes('/x/hintbar.mjs'));
+  check(`genLayout(${n}) has no old agentbar/separator panes`,
     !kdl.includes('agentbar.mjs') && !kdl.includes('separator.mjs'));
   // every `args "..."` child node must end in a terminator before its closing brace
   check(`genLayout(${n}) terminates inline args nodes (the parse bug)`,

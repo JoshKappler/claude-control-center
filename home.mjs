@@ -93,11 +93,13 @@ function genLayout(n, app) {
 layout {
     default_tab_template {
         pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
-        pane size=1 borderless=true command="node" { args "${app}/hintbar.mjs"; }
         children
     }
     tab {
+        pane split_direction="horizontal" {
 ${gridKdl(n, rows)}
+                pane size=1 borderless=true command="node" { args "${app}/hintbar.mjs"; }
+        }
     }
 }
 `;
@@ -307,7 +309,7 @@ function sampleSystem() {
   const now = new Date();
   const date = {
     pretty: DOW[now.getDay()] + '  ' + MON[now.getMonth()] + ' ' + two(now.getDate()) + ', ' + now.getFullYear(),
-    hms: two(now.getHours()) + ':' + two(now.getMinutes()) + ':' + two(now.getSeconds()),
+    hms: (now.getHours() % 12 || 12) + ':' + two(now.getMinutes()) + ':' + two(now.getSeconds()) + ' ' + (now.getHours() < 12 ? 'AM' : 'PM'),
   };
   const cpu = cpuPercent();
   const totMem = os.totalmem(), freeMem = os.freemem();

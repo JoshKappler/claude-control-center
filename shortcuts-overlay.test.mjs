@@ -26,12 +26,11 @@ check('IN_TAB has a "Home" shortcut', IN_TAB.some((i) => /home/i.test(i.label)))
 check('every IN_TAB entry has non-empty keys + label',
   IN_TAB.every((i) => i.keys && i.label) && IN_TAB.length >= 7);
 
-// --- Hint fills the row exactly and names the reveal key. ---
+// --- Hint never overflows its row and names the reveal key. ---
 for (const w of [20, 80, 200]) {
-  const line = buildHint(w);
-  check(`buildHint(${w}) is exactly ${w} wide`, line.length === w, `${line.length}`);
+  check(`buildHint(${w}) fits within ${w} cols`, buildHint(w).length <= w, `${buildHint(w).length}`);
 }
-check('hint names Alt+S', stripAnsi(buildHint(80)).includes('Alt+S'));
+check('hint names Alt+S', buildHint(80).includes('Alt+S'));
 
 // --- Overlay lists BOTH contexts, one line per shortcut, untruncated. ---
 const sheet = buildSheet();

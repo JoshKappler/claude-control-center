@@ -127,7 +127,7 @@ Watch it: `tail -f ~/.claude/state/cc/sync.log`. Each line is one tick, e.g.
 | `clone-all.mjs` | `node clone-all.mjs <root>` → clones missing + `--ff-only` pulls all your GitHub repos. Finds clones **one level deep too** (e.g. `other/algora`) and updates them in place instead of re-cloning a top-level duplicate. Never discards local work. |
 | `sync-daemon.mjs` | **Always-on background sync.** Self-updates this repo (`git pull --ff-only`), then runs `clone-all.mjs` over the projects folder it lives in. Run on a schedule by the macOS LaunchAgent. Logs to `~/.claude/state/cc/sync.log`. |
 | `macos/install-sync-agent.sh` | Installs `sync-daemon.mjs` as a LaunchAgent that runs at login and every 10 min. `macos/uninstall-sync-agent.sh` removes it. |
-| `hintbar.mjs` | One-row hint pinned under the tab strip on every tab: `Alt+S — keyboard shortcuts`. The single discovery key. |
+| `hintbar.mjs` | A subtle dim one-row footnote at the bottom of each agent window: `Press Alt+S for keyboard shortcuts`. |
 | `cheatsheet.mjs` | The `Alt+S` overlay (floating pane): the **complete** shortcut list in plain English, grouped by context. Renders from `shortcuts.mjs`; any key closes it. |
 | `hooks/session-register.mjs` | SessionStart/SessionEnd hook: maintains `panes/<id>` and cleans up state. |
 | `hooks/subagent-track.mjs` | Subagent/tool hooks: maintains `subagents/<parent>/<agentId>.json`. |
