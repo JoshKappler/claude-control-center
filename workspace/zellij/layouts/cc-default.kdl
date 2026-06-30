@@ -8,10 +8,10 @@ layout {
         // show the "ALT-click group" mouse hint that the compact/status bar does,
         // so the mouse can stay on without that clutter.
         pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
-        // Black separator row: breaks the green chevron tab-bar away from the
-        // content beneath it so the top of the window is not one solid green blob.
+        // Hint row: separates the green chevron tab-bar from the content AND tells
+        // you the one key (Alt+S) that reveals every shortcut for this page.
         pane size=1 borderless=true command="node" {
-            args "{{APP}}/separator.mjs"
+            args "{{APP}}/hintbar.mjs"
         }
         children
     }

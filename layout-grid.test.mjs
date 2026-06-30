@@ -46,14 +46,15 @@ for (let n = 1; n <= 8; n++) {
   check(`n=${n}: no empty rows`, counts.every((c) => c >= 1));
 }
 
-// --- genLayout output is structurally sound: one pane per agent + the two helper
-//     strips (separator, agentbar), and every node is properly terminated. ---
+// --- genLayout output is structurally sound: one pane per agent + the top hint row
+//     (hintbar), no bottom strip, and every node is properly terminated. ---
 for (let n = 1; n <= 8; n++) {
   const kdl = genLayout(n, '/x'); // window read from process.stdout (defaults are fine here)
   const agents = (kdl.match(/command="claude"/g) || []).length;
   check(`genLayout(${n}) emits ${n} claude panes`, agents === n);
-  check(`genLayout(${n}) includes separator + agentbar strips`,
-    kdl.includes('/x/separator.mjs') && kdl.includes('/x/agentbar.mjs'));
+  check(`genLayout(${n}) puts the hintbar row at the top`, kdl.includes('/x/hintbar.mjs'));
+  check(`genLayout(${n}) has no bottom shortcut strip (removed)`,
+    !kdl.includes('agentbar.mjs') && !kdl.includes('separator.mjs'));
   // every `args "..."` child node must end in a terminator before its closing brace
   check(`genLayout(${n}) terminates inline args nodes (the parse bug)`,
     !/\.mjs"\s+\}/.test(kdl));

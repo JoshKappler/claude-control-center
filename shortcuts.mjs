@@ -1,22 +1,24 @@
 #!/usr/bin/env node
 // shortcuts.mjs — the ONE source of truth for every advertised keyboard shortcut.
-// agentbar.mjs (the bottom in-tab strip) and home.mjs (cheatsheet + help overlay)
-// both render from this data, so the hints can never drift apart again. The actual
+// cheatsheet.mjs (the Alt+S overlay) and home.mjs (footer + help overlay) both render
+// from this data, so the hints can never drift apart again. The actual
 // in-tab key BINDINGS live in workspace/zellij/config.kdl (Zellij can't import JS),
 // which install.mjs deploys to ~/.config/zellij/config.kdl; keep that file's
 // keybinds in sync with IN_TAB below. Zero deps.
 
-// In-tab shortcuts (bound by zellij in workspace/zellij/config.kdl).
-// essential:true groups survive even on a narrow pane — close-agent and lock are
-// the keys you must never lose.
+// In-tab shortcuts (bound by zellij in workspace/zellij/config.kdl), in priority
+// order — the Home footer's WINDOW row keeps as many as fit from the FRONT. The full
+// list always shows, untruncated, in the Alt+S overlay (cheatsheet.mjs).
 export const IN_TAB = [
-  { keys: 'Alt+Arrows',  label: 'switch agent',     essential: false },
-  { keys: 'Alt+[ Alt+]', label: 'switch window',    essential: false },
-  { keys: 'Alt+a',       label: 'add agent',        essential: false },
-  { keys: 'Ctrl+Alt+w',  label: 'close agent',      essential: true  },
-  { keys: 'Ctrl+Alt+q',  label: 'close window',     essential: true  },
-  { keys: 'Ctrl+g',      label: 'lock to Claude',   essential: true  },
-  { keys: 'Alt+i',       label: 'subagent monitor', essential: false },
+  { keys: 'Alt+Arrows',       label: 'move between agents' },
+  { keys: 'Alt+[ / Alt+]',    label: 'previous / next window' },
+  { keys: 'Alt+H',            label: 'jump to the Home dashboard' },
+  { keys: 'Alt+A',            label: 'add another agent here' },
+  { keys: 'Alt+Shift+Arrows', label: 'resize the focused agent' },
+  { keys: 'Ctrl+Alt+W',       label: 'close this one agent' },
+  { keys: 'Ctrl+Alt+Q',       label: 'close this whole window' },
+  { keys: 'Alt+I',            label: 'subagent monitor' },
+  { keys: 'Ctrl+G',           label: 'pass all keys to Claude (Esc frees)' },
 ];
 
 // Dashboard (home.mjs) keys — parser-bound inside home.mjs itself.

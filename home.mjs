@@ -29,8 +29,8 @@ import { DASHBOARD, IN_TAB, fitGroups } from './shortcuts.mjs';
 
 // ---------- shared state ----------
 const HOME = os.homedir();
-// Self-locating: sibling scripts (git-push-all, clone-all, inspector, agentbar,
-// separator) are found relative to THIS file, so the app runs correctly wherever it lives —
+// Self-locating: sibling scripts (git-push-all, clone-all, inspector, hintbar,
+// cheatsheet) are found relative to THIS file, so the app runs correctly wherever it lives —
 // its repo at ~/OneDrive/desktop/projects/claude-control-center, or the old
 // ~/.local/share/claude-cc deploy. No hard-coded install path any more.
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -89,18 +89,15 @@ function gridKdl(n, rows) {
 
 function genLayout(n, app) {
   const { rows } = chooseGrid(n, termCols(), termRows());
-  return `// ${n} Claude agent${n === 1 ? '' : 's'} — generated for this window (balanced ${rows}-row grid). Shortcut strip at the bottom.
+  return `// ${n} Claude agent${n === 1 ? '' : 's'} — generated for this window (balanced ${rows}-row grid). Alt+S reveals shortcuts.
 layout {
     default_tab_template {
         pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
-        pane size=1 borderless=true command="node" { args "${app}/separator.mjs"; }
+        pane size=1 borderless=true command="node" { args "${app}/hintbar.mjs"; }
         children
     }
     tab {
-        pane split_direction="horizontal" {
 ${gridKdl(n, rows)}
-                pane size=1 borderless=true command="node" { args "${app}/agentbar.mjs"; }
-        }
     }
 }
 `;
@@ -739,9 +736,10 @@ function renderHelp(W) {
   L.push('   ' + g('Each agent has a titled border ("Claude 1", "Claude 2", ...); the one you are'));
   L.push('   ' + g('typing into is highlighted. Move between them with ') + k('Alt+Arrow keys') + g('.'));
   L.push('   ' + g('Switch between tabs (windows) with ') + k('Alt+[') + g(' and ') + k('Alt+]') + g('.'));
-  L.push('   ' + g('Add another Claude: ') + k('Alt+a') + g('.   Close one agent: ') + k('Ctrl+Alt+w') + g('.   Close the whole tab: ') + k('Ctrl+Alt+q') + g('.'));
+  L.push('   ' + g('Add another Claude: ') + k('Alt+a') + g('.   Resize one: ') + k('Alt+Shift+Arrows') + g('.   Jump back here: ') + k('Alt+h') + g('.'));
+  L.push('   ' + g('Close one agent: ') + k('Ctrl+Alt+w') + g('.   Close the whole tab: ') + k('Ctrl+Alt+q') + g('.'));
   L.push('   ' + g('Locked out of Claude by a Zellij shortcut? ') + k('Ctrl+g') + g(' locks all keys to Claude (press it again to unlock).'));
-  L.push('   ' + g('The green shortcut bar at the BOTTOM of every agent window lists these too.'));
+  L.push('   ' + g('Forgot a key? Press ') + k('Alt+S') + g(' in any window for the full list on screen.'));
   L.push('');
   L.push(h('4. Making a new project folder'));
   L.push('   ' + g('Press ') + k('n') + g(', type a name, and press ') + k('Enter') + g(' to create a folder inside the one you are'));

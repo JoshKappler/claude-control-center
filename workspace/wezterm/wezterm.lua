@@ -30,4 +30,17 @@ wezterm.on('update-right-status', function(window, _)
   window:set_right_status(window:leader_is_active() and ' LEADER ▸ n:new-win  t:tab  w:close  f:fullscreen ' or '')
 end)
 
+-- OS title bar reads "Claude Control Center", not zellij's "Zellij (claude-cc)"
+-- branding — you already know where you are; the row that matters is the Alt+S hint.
+wezterm.on('format-window-title', function() return 'Claude Control Center' end)
+
+-- Launch MAXIMIZED (windowed full-screen): fill the whole monitor, snapped to the
+-- top, but keep the title bar (window_decorations = 'TITLE') so it can still be
+-- dragged, resized, and closed with the mouse. NOT ToggleFullScreen (that hides the
+-- chrome). Leader+f still toggles true fullscreen on demand.
+wezterm.on('gui-startup', function(cmd)
+  local _, _, window = wezterm.mux.spawn_window(cmd or {})
+  window:gui_window():maximize()
+end)
+
 return config

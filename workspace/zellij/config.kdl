@@ -49,8 +49,20 @@ keybinds {
 
     // --- Control Center actions (active in every mode except locked) ---
     shared_except "locked" {
+        // Alt+s: reveal EVERY shortcut for the current page in a floating overlay
+        // (plain English, no truncation). Any key closes it. This is THE discovery
+        // key — the thin bar under the tab strip advertises it on every tab.
+        bind "Alt s" { Run "node" "{{APP}}/cheatsheet.mjs" { floating true; name "shortcuts"; }; }
         // Alt+a: add another Claude agent in this tab (new pane running `claude`).
         bind "Alt a" { Run "claude"; }
+        // Alt+h: jump straight back to the Home dashboard (always the first tab).
+        bind "Alt h" { GoToTab 1; }
+        // Alt+Shift+Arrows: resize the focused agent (grow toward that edge). Pairs
+        // with Alt+Arrows (move focus) — same fingers, add Shift to resize.
+        bind "Alt Shift Left"  { Resize "Increase Left"; }
+        bind "Alt Shift Right" { Resize "Increase Right"; }
+        bind "Alt Shift Up"    { Resize "Increase Up"; }
+        bind "Alt Shift Down"  { Resize "Increase Down"; }
         // Alt+i: open the subagent monitor for this window as a floating overlay.
         bind "Alt i" { Run "node" "{{APP}}/inspector.mjs" { floating true; }; }
         // Ctrl+Alt+w: DELIBERATE manual close of the focused agent. Closing is the
