@@ -305,6 +305,25 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function two(n) { return (n < 10 ? '0' : '') + n; }
 let sysTick = 0, gpuCache = null;
+// macOS os.freemem() counts only truly-free pages, so reclaimable file cache
+// (inactive/speculative/purgeable) reads as "used" and the gauge pins near 100%.
+// Match Activity Monitor's "Memory Used" instead: active + wired + compressed.
+// Returns used bytes, or null if vm_stat is missing/unparseable (caller falls back).
+function macMemUsedBytes() {
+  try {
+    const r = spawnSync('vm_stat', [], { encoding: 'utf8', timeout: 2000 });
+    if (r.error || r.status !== 0) return null;
+    const out = r.stdout || '';
+    const pm = out.match(/page size of (\d+) bytes/);
+    const pageSize = pm ? parseInt(pm[1], 10) : 4096;
+    const pages = (label) => { const m = out.match(new RegExp(label + ':\\s+(\\d+)\\.')); return m ? parseInt(m[1], 10) : 0; };
+    const active = pages('Pages active');
+    const wired = pages('Pages wired down');
+    const compressed = pages('Pages occupied by compressor');
+    if (active === 0 && wired === 0) return null;   // didn't parse — fall back
+    return (active + wired + compressed) * pageSize;
+  } catch { return null; }
+}
 function sampleSystem() {
   const now = new Date();
   const date = {
@@ -312,8 +331,10 @@ function sampleSystem() {
     hms: (now.getHours() % 12 || 12) + ':' + two(now.getMinutes()) + ':' + two(now.getSeconds()) + ' ' + (now.getHours() < 12 ? 'AM' : 'PM'),
   };
   const cpu = cpuPercent();
-  const totMem = os.totalmem(), freeMem = os.freemem();
-  const memPct = totMem > 0 ? 100 * (totMem - freeMem) / totMem : null;
+  const totMem = os.totalmem();
+  let usedMem = totMem - os.freemem();
+  if (process.platform === 'darwin') { const u = macMemUsedBytes(); if (u != null) usedMem = u; }
+  const memPct = totMem > 0 ? 100 * usedMem / totMem : null;
   let disk = null;
   try {
     const root = path.parse(defaultRoot()).root || 'C:\\';
@@ -323,7 +344,7 @@ function sampleSystem() {
   } catch { disk = null; }
   if (sysTick % 5 === 0) gpuCache = sampleGpu();
   sysTick++;
-  state.sys = { date, cpu, memPct, memUsedGB: (totMem - freeMem) / 1e9, memTotGB: totMem / 1e9, disk, gpu: gpuCache };
+  state.sys = { date, cpu, memPct, memUsedGB: usedMem / 1e9, memTotGB: totMem / 1e9, disk, gpu: gpuCache };
 }
 
 // ---------- subagents ----------
