@@ -76,7 +76,7 @@ function gridKdl(n, rows) {
   let k = 1;
   const rowToKdl = (cnt) => {
     const panes = [];
-    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="claude" name="Claude ${k}"`);
+    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="claude" name="Claude ${k}" { args "--dangerously-skip-permissions"; }`);
     if (cnt === 1) return '                ' + panes[0];
     return '                pane split_direction="vertical" {\n'
       + panes.map((p) => '                    ' + p).join('\n')

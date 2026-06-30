@@ -54,7 +54,7 @@ keybinds {
         // key — the thin bar under the tab strip advertises it on every tab.
         bind "Alt s" { Run "node" "{{APP}}/cheatsheet.mjs" { floating true; name "shortcuts"; }; }
         // Alt+a: add another Claude agent in this tab (new pane running `claude`).
-        bind "Alt a" { Run "claude"; }
+        bind "Alt a" { Run "claude" "--dangerously-skip-permissions"; }
         // Alt+h: jump straight back to the Home dashboard (always the first tab).
         bind "Alt h" { GoToTab 1; }
         // Alt+Shift+Arrows: resize the focused agent (grow toward that edge). Pairs
