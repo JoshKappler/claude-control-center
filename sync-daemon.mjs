@@ -44,6 +44,23 @@ function selfUpdate() {
   return 'self-update: ok';
 }
 
+function chezmoiSync() {
+  // The terminal wiring (zellij + wezterm config) is deployed by chezmoi from a
+  // SEPARATE dotfiles repo that lives OUTSIDE the projects root — so selfUpdate()
+  // and clone-all never touch it. Without this step a config fix pushed from another
+  // machine never reaches this one (the bug that left a stale Home tab-bar here).
+  // Pull the chezmoi source repo, then re-apply ONLY the CC wiring paths so we never
+  // clobber unrelated dotfiles (chezmoi also honors .chezmoiignore). Non-fatal.
+  const home = os.homedir();
+  const targets = [path.join(home, '.config', 'zellij'), path.join(home, '.config', 'wezterm')];
+  const pull = spawnSync('chezmoi', ['git', '--', 'pull', '--ff-only', '--quiet'], { encoding: 'utf8', timeout: 120000 });
+  if (pull.error) return 'chezmoi: ' + (pull.error.code === 'ENOENT' ? 'not installed' : (pull.error.code || pull.error.message));
+  const apply = spawnSync('chezmoi', ['apply', ...targets], { encoding: 'utf8', timeout: 60000 });
+  if (apply.error) return 'chezmoi: ' + (apply.error.code || apply.error.message);
+  if (apply.status !== 0) return 'chezmoi: apply skipped (' + String(apply.stderr || '').trim().replace(/\s+/g, ' ').slice(0, 80) + ')';
+  return 'chezmoi: ok';
+}
+
 function runCloneAll() {
   // Spawn the (now freshly-pulled) clone-all with this same node binary.
   const r = spawnSync(process.execPath, [path.join(REPO, 'clone-all.mjs'), ROOT],
@@ -74,15 +91,16 @@ function appendLog(line) {
 function main() {
   fs.mkdirSync(STATE, { recursive: true });
   const self = selfUpdate();
+  const chez = chezmoiSync();
   const { parsed, raw, err, status, error } = runCloneAll();
 
   if (parsed) {
-    try { fs.writeFileSync(LAST, JSON.stringify({ at: ts(), self, ...parsed }, null, 2)); } catch { /* */ }
-    appendLog(`${ts()}  ${self}  |  ${summarize(parsed)}`);
+    try { fs.writeFileSync(LAST, JSON.stringify({ at: ts(), self, chezmoi: chez, ...parsed }, null, 2)); } catch { /* */ }
+    appendLog(`${ts()}  ${self}  |  ${chez}  |  ${summarize(parsed)}`);
   } else {
     const why = error ? (error.code || error.message)
       : String(err || raw || 'no output').trim().replace(/\s+/g, ' ').slice(0, 160);
-    appendLog(`${ts()}  ${self}  |  clone-all FAILED (status ${status}): ${why}`);
+    appendLog(`${ts()}  ${self}  |  ${chez}  |  clone-all FAILED (status ${status}): ${why}`);
   }
   process.exit(0);
 }
