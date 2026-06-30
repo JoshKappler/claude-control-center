@@ -2,10 +2,11 @@
 // shortcuts.mjs — the ONE source of truth for every advertised keyboard shortcut.
 // agentbar.mjs (the bottom in-tab strip) and home.mjs (cheatsheet + help overlay)
 // both render from this data, so the hints can never drift apart again. The actual
-// in-tab key BINDINGS live in the chezmoi zellij config.kdl (Zellij can't import
-// JS); keep that file's keybinds in sync with IN_TAB below. Zero deps.
+// in-tab key BINDINGS live in workspace/zellij/config.kdl (Zellij can't import JS),
+// which install.mjs deploys to ~/.config/zellij/config.kdl; keep that file's
+// keybinds in sync with IN_TAB below. Zero deps.
 
-// In-tab shortcuts (bound by zellij in the dotfiles repo's config.kdl).
+// In-tab shortcuts (bound by zellij in workspace/zellij/config.kdl).
 // essential:true groups survive even on a narrow pane — close-agent and lock are
 // the keys you must never lose.
 export const IN_TAB = [

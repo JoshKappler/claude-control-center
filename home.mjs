@@ -29,8 +29,8 @@ import { DASHBOARD, IN_TAB, fitGroups } from './shortcuts.mjs';
 
 // ---------- shared state ----------
 const HOME = os.homedir();
-// Self-locating: sibling scripts (git-push-all, clone-all, inspector, layouts/)
-// are found relative to THIS file, so the app runs correctly wherever it lives —
+// Self-locating: sibling scripts (git-push-all, clone-all, inspector, agentbar,
+// separator) are found relative to THIS file, so the app runs correctly wherever it lives —
 // its repo at ~/OneDrive/desktop/projects/claude-control-center, or the old
 // ~/.local/share/claude-cc deploy. No hard-coded install path any more.
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -42,23 +42,76 @@ function appDir() { return APP_DIR; }
 function inspectorPath() { return path.join(appDir(), 'inspector.mjs'); }
 function gitPushPath() { return path.join(appDir(), 'git-push-all.mjs'); }
 function cloneAllPath() { return path.join(appDir(), 'clone-all.mjs'); }
-// The claude-N.kdl files are TEMPLATES containing the token {{APP}} wherever they
-// reference a sibling script. We render the token to the live APP_DIR at launch
-// and write the result to the state dir, so the agent tabs work no matter where
-// this app folder lives — no stale hard-coded install path baked into the layout.
+// Agent tabs are GENERATED at launch, not read from static files: we tile the N
+// agents into a balanced grid sized to the CURRENT window so panes come out as
+// square as possible — stacked rows on a portrait monitor, side-by-side columns on
+// a landscape one. Sibling-script paths are baked to the live APP_DIR so the tab
+// works wherever this folder lives. (cc-default.kdl, the Home tab, stays static.)
+const CELL_ASPECT = 2.0;   // a terminal cell is roughly twice as tall as it is wide
+
+// Pick a balanced rows x cols grid whose panes are nearest to square for a window
+// `cols` chars wide and `rows` chars tall. Pure + deterministic (unit-testable).
+function chooseGrid(n, cols, rows) {
+  const Wv = Math.max(1, cols);                 // visual width  (1 unit / char cell)
+  const Hv = Math.max(1, rows) * CELL_ASPECT;   // visual height (cells are ~2x tall)
+  let best = null;
+  for (let c = 1; c <= n; c++) {
+    const r = Math.ceil(n / c);
+    if ((r - 1) * c >= n) continue;             // drop grids that leave a whole row empty
+    const score = Math.abs(Math.log((Wv / c) / (Hv / r)));   // 0 == perfectly square
+    if (!best || score < best.score) best = { rows: r, cols: c, score };
+  }
+  return best ? { rows: best.rows, cols: best.cols } : { rows: 1, cols: 1 };
+}
+
+// Split n agents across r rows as evenly as possible (earlier rows take the extra).
+function rowCounts(n, r) {
+  const base = Math.floor(n / r), extra = n % r;
+  return Array.from({ length: r }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+// The agent-grid KDL (the part of the tab above the shortcut strip). Each row is a
+// left-to-right vertical split; rows are stacked with an outer horizontal split.
+function gridKdl(n, rows) {
+  let k = 1;
+  const rowToKdl = (cnt) => {
+    const panes = [];
+    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="claude" name="Claude ${k}"`);
+    if (cnt === 1) return '                ' + panes[0];
+    return '                pane split_direction="vertical" {\n'
+      + panes.map((p) => '                    ' + p).join('\n')
+      + '\n                }';
+  };
+  const body = rowCounts(n, rows).map(rowToKdl).join('\n');
+  if (rows === 1) return body;
+  return '                pane split_direction="horizontal" {\n' + body + '\n                }';
+}
+
+function genLayout(n, app) {
+  const { rows } = chooseGrid(n, termCols(), termRows());
+  return `// ${n} Claude agent${n === 1 ? '' : 's'} — generated for this window (balanced ${rows}-row grid). Shortcut strip at the bottom.
+layout {
+    default_tab_template {
+        pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
+        pane size=1 borderless=true command="node" { args "${app}/separator.mjs"; }
+        children
+    }
+    tab {
+        pane split_direction="horizontal" {
+${gridKdl(n, rows)}
+                pane size=1 borderless=true command="node" { args "${app}/agentbar.mjs"; }
+        }
+    }
+}
+`;
+}
+
 function layoutPath(n) {
-  const tmpl = path.join(appDir(), 'layouts', 'claude-' + n + '.kdl');
+  const app = appDir().replace(/\\/g, '/');
   const genDir = path.join(stateRoot(), 'gen');
   const outFile = path.join(genDir, 'claude-' + n + '.kdl');
-  try {
-    let s = fs.readFileSync(tmpl, 'utf8');
-    s = s.split('{{APP}}').join(appDir().replace(/\\/g, '/'));
-    fs.mkdirSync(genDir, { recursive: true });
-    fs.writeFileSync(outFile, s, 'utf8');
-    return outFile.replace(/\\/g, '/');
-  } catch {
-    return tmpl.replace(/\\/g, '/');   // fallback: use the template as-is
-  }
+  try { fs.mkdirSync(genDir, { recursive: true }); fs.writeFileSync(outFile, genLayout(n, app), 'utf8'); } catch { /* fall through */ }
+  return outFile.replace(/\\/g, '/');
 }
 const AGENT_STALE_MS = 120 * 1000;
 
@@ -914,7 +967,7 @@ function isDirectRun() {
 if (isDirectRun()) main();
 
 // Test hooks (no effect in normal operation).
-export { decodeInput, feed, checkLaunchAllowed, LAUNCH_MIN_INTERVAL_MS, MAX_SESSION_PANES };
+export { decodeInput, feed, checkLaunchAllowed, LAUNCH_MIN_INTERVAL_MS, MAX_SESSION_PANES, chooseGrid, rowCounts, genLayout };
 export function __setDispatch(fn) { dispatchEvent = fn || applyEvent; }
 export function __acceptInputNow() { acceptInput = true; inbuf = ''; }
 export function __resetInput() { acceptInput = false; inbuf = ''; if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; } }
