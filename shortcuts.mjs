@@ -13,44 +13,48 @@
 // `label` short (it shares the cramped footer); put the detail in `desc`.
 export const IN_TAB = [
   { keys: 'Alt+Arrows',       label: 'move between agents',        section: 'MOVE & RESIZE',
-    desc: 'move focus between the Claude agents in this window' },
+    desc: 'move focus between agents' },
   { keys: 'Alt+[ / Alt+]',    label: 'previous / next window',     section: 'MOVE & RESIZE',
-    desc: 'jump to the previous / next agent window (a whole job)' },
+    desc: 'previous / next agent window' },
   { keys: 'Alt+H',            label: 'jump to the Home dashboard', section: 'MOVE & RESIZE',
-    desc: 'go back to the Home dashboard (always the first window)' },
+    desc: 'jump to the Home dashboard' },
   { keys: 'Alt+Shift+Arrows', label: 'resize the focused agent',  section: 'MOVE & RESIZE',
-    desc: 'resize the focused agent, growing it toward that edge' },
+    desc: 'resize the focused agent' },
   { keys: 'Alt+A',            label: 'add another agent here',     section: 'AGENTS & WINDOWS',
-    desc: 'add another Claude agent alongside the ones already here' },
+    desc: 'add another agent here' },
   { keys: 'Ctrl+Alt+W',       label: 'close this one agent',       section: 'AGENTS & WINDOWS',
-    desc: 'close just the focused agent (the deliberate way)' },
+    desc: 'close the focused agent' },
   { keys: 'Ctrl+Alt+Q',       label: 'close this whole window',    section: 'AGENTS & WINDOWS',
-    desc: 'close this whole window and every agent inside it at once' },
+    desc: 'close this whole window' },
   { keys: 'Alt+I',            label: 'subagent monitor',           section: 'DISCOVER & ESCAPE',
-    desc: 'open the subagent monitor for this window' },
+    desc: 'open the subagent monitor' },
   { keys: 'Ctrl+G',           label: 'pass all keys to Claude',    section: 'DISCOVER & ESCAPE',
-    desc: 'send keys straight to Claude; Ctrl+G again to unlock' },
+    desc: 'pass all keys to Claude' },
   { keys: 'Alt+S',            label: 'show / hide this list',      section: 'DISCOVER & ESCAPE',
-    desc: 'show or hide this list — press Alt+S again to close it' },
+    desc: 'show / hide this list (Alt+S again closes)' },
 ];
 
 // Dashboard (home.mjs) keys — parser-bound inside home.mjs itself. Short `label` for
-// the Home footer; a one-line `desc` for the Alt+S overlay.
+// the Home footer; a one-line `desc` for the Alt+S overlay. Items flagged
+// `overlayOnly` show in the Alt+S overlay but are kept OUT of the cramped Home footer
+// (they already have prominent, live controls in the LAUNCH section).
 export const DASHBOARD = [
   { row: 'MOVE', items: [
-    { keys: 'Up/Dn', label: 'move bar',    desc: 'move the selection bar up and down the list' },
-    { keys: '->',    label: 'open folder', desc: 'open the highlighted folder to see what is inside' },
-    { keys: '<-',    label: 'back',        desc: 'go back up to the parent folder' },
-    { keys: 'Tab',   label: 'switch list', desc: 'switch between the folder list and the subagents list' },
+    { keys: 'Up/Dn', label: 'move bar',    desc: 'move the selection bar' },
+    { keys: '->',    label: 'open folder', desc: 'open the highlighted folder' },
+    { keys: '<-',    label: 'back',        desc: 'go up to the parent folder' },
+    { keys: 'Tab',   label: 'switch list', desc: 'switch the active list' },
   ] },
   { row: 'DO', items: [
-    { keys: '1-8',   label: '#agents',    desc: 'choose how many agents to launch (1 to 8, one working tree)' },
-    { keys: 'Enter', label: 'launch',     desc: 'launch that many agents into the selected folder' },
-    { keys: 'n',     label: 'new folder', desc: 'create a new sub-folder inside the current one' },
-    { keys: 'g',     label: 'push',       desc: 'push every repo to GitHub, each on its current branch' },
-    { keys: 'c',     label: 'pull',       desc: 'pull every repo — clone what is missing, fast-forward the rest' },
-    { keys: '?',     label: 'help',       desc: 'show the built-in Home dashboard help' },
-    { keys: 'q',     label: 'quit',       desc: 'quit — closes the session and every agent in it' },
+    { keys: '1-8',   label: '#agents',    desc: 'how many agents to launch' },
+    { keys: 'Enter', label: 'launch',     desc: 'launch agents in the folder' },
+    { keys: 'm',     label: 'model',      desc: 'cycle the launch model', overlayOnly: true },
+    { keys: 'e',     label: 'effort',     desc: 'cycle the effort level', overlayOnly: true },
+    { keys: 'n',     label: 'new folder', desc: 'create a new sub-folder' },
+    { keys: 'g',     label: 'push',       desc: 'push every repo to GitHub' },
+    { keys: 'c',     label: 'pull',       desc: 'pull every repo from GitHub' },
+    { keys: '?',     label: 'help',       desc: 'show the dashboard help' },
+    { keys: 'q',     label: 'quit',       desc: 'quit (closes all agents)' },
   ] },
 ];
 

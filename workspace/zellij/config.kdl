@@ -54,13 +54,17 @@ keybinds {
 
     // --- Control Center actions (active in every mode except locked) ---
     shared_except "locked" {
-        // Alt+s: reveal EVERY shortcut for the current page in a floating overlay
-        // (plain English, no truncation). It TOGGLES — press Alt+s again (or any other
-        // key) to close it. cheatsheet.mjs drops a marker file so a second press
-        // collapses the open overlay instead of stacking another on top, and closes the
-        // pane itself via `zellij action close-pane`. This is THE discovery key — the
-        // thin bar under the tab strip advertises it on every tab.
-        bind "Alt s" { Run "node" "{{APP}}/cheatsheet.mjs" { floating true; name "shortcuts"; }; }
+        // Alt+s: reveal EVERY shortcut for the current page in a BIG floating overlay
+        // (~90% of the screen — so the two-column table never wraps and never needs
+        // scrolling; the old default-sized pane was the tiny window that mangled it).
+        // It TOGGLES — press Alt+s again (or any other key) to close it. cheatsheet.mjs
+        // drops a marker file so a second press collapses the open overlay instead of
+        // stacking another on top. `close_on_exit true` is the RELIABLE close: when the
+        // script exits (a key, or the toggle removing the marker) Zellij tears the pane
+        // down itself — no dependence on `zellij action close-pane` reaching a focused
+        // pane, which is why the overlay kept getting stuck open. This is THE discovery
+        // key — the thin bar under the tab strip advertises it on every tab.
+        bind "Alt s" { Run "node" "{{APP}}/cheatsheet.mjs" { floating true; name "shortcuts"; close_on_exit true; x "5%"; y "5%"; width "90%"; height "90%"; }; }
         // Alt+a: add another Claude agent in this tab (new pane running `claude`).
         bind "Alt a" { Run "claude" "--dangerously-skip-permissions"; }
         // Alt+h: jump straight back to the Home dashboard (always the first tab).

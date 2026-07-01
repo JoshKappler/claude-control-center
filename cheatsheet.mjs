@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// cheatsheet.mjs — the EXPANDED shortcut overlay. Opened as a floating pane by Alt+S
-// (bound in workspace/zellij/config.kdl) from any tab. It lists EVERYTHING you can do
-// in plain English — one line per shortcut, a dotted leader tying each key to its
-// description, grouped by where it applies and split into sub-sections. All text comes
-// from shortcuts.mjs (the single source of truth), so it can never drift from the real
-// bindings. Zero deps.
+// cheatsheet.mjs — the EXPANDED shortcut overlay. Opened as a big floating pane by Alt+S
+// (bound in workspace/zellij/config.kdl, sized to ~90% of the screen there) from any tab.
+// It lists EVERYTHING you can do as a clean two-column table — the key on the left, a
+// brief description on the right, always on the same line (the key never wraps). On a
+// wide pane the two contexts (agent window | dashboard) sit side by side to fill the
+// screen; on a narrow one they stack. All text comes from shortcuts.mjs (the single
+// source of truth), so it can never drift from the real bindings. Zero deps.
 //
 // Toggle, not stack: Alt+S is a global Zellij bind, so while the overlay is focused
 // Zellij intercepts Alt+S BEFORE our stdin — pressing it again would spawn ANOTHER
@@ -36,18 +37,13 @@ const CLEAR = ESC + '[2J' + ESC + '[H';
 const HIDE = ESC + '[?25l';
 const SHOW = ESC + '[?25h';
 
-// Greedy word-wrap to `width` columns. Returns at least one (possibly empty) line.
-// A safety net for narrow overlays; the descriptions are written to fit one line on a
-// normally-sized window.
-function wrap(text, width) {
-  const lines = [];
-  let cur = '';
-  for (const word of String(text).split(/\s+/)) {
-    if (cur && cur.length + 1 + word.length > width) { lines.push(cur); cur = word; }
-    else cur = cur ? cur + ' ' + word : word;
-  }
-  lines.push(cur);
-  return lines;
+// Truncate `s` to `n` visible columns, marking a cut with a trailing ~. Keys are never
+// fed through this — only descriptions — so a key can never be clipped or wrapped.
+function truncate(s, n) {
+  s = String(s == null ? '' : s);
+  if (n <= 0) return '';
+  if (s.length <= n) return s;
+  return s.slice(0, Math.max(1, n - 1)) + '~';
 }
 
 // Distinct `section` values in first-seen order.
@@ -57,45 +53,56 @@ function sectionsOf(items) {
   return seen;
 }
 
-// Build the overlay as an array of lines. Pure (the only input is `width`) so a test
-// can assert the structure and that every shortcut is present. `width` controls where
-// an over-long description would wrap; the live draw() passes the real terminal width.
+// Build the overlay as an array of lines: a clean two-column table — the key on the
+// LEFT, a brief description on the RIGHT, always on the SAME line. The key is never
+// wrapped or truncated; only an over-long description is clipped (never wrapped), so a
+// line can never run off the edge. On a wide overlay the two contexts sit SIDE BY SIDE
+// (agent window | dashboard) to fill the screen; on a narrow one they stack. Pure (the
+// only input is `width`) so a test can assert structure + that every shortcut is present
+// and that no line exceeds `width`. The live draw() passes the real pane width.
 export function buildSheet(width = 100) {
-  const all = IN_TAB.concat(DASHBOARD.flatMap((g) => g.items));
-  const keyW = Math.max(...all.map((i) => i.keys.length)) + 3;   // key + dotted-leader field
-  const INDENT = '    ';
-  const GAP = '  ';
-  const descCol = INDENT.length + keyW + GAP.length;             // column where text starts
-  const descW = Math.max(30, width - descCol - 1);               // wrap width for descriptions
-  const hang = ' '.repeat(descCol);
+  const leftGroups = sectionsOf(IN_TAB).map((sec) => ({ head: sec, items: IN_TAB.filter((i) => i.section === sec) }));
+  const rightGroups = DASHBOARD.map((g) => ({ head: g.row, items: g.items }));
 
-  // One shortcut → one line: the key, a dotted leader filling a fixed-width field so
-  // every description lines up in the same column, then the plain-English text.
-  const row = (it) => {
-    const dots = '.'.repeat(Math.max(2, keyW - it.keys.length - 1));
-    const lead = INDENT + CYAN + it.keys + RESET + ' ' + DGREEN + dots + RESET + GAP;
-    const wrapped = wrap(it.desc || it.label, descW);
-    const head = lead + GREEN + wrapped[0] + RESET;
-    const rest = wrapped.slice(1).map((l) => hang + GREEN + l + RESET);
-    return [head, ...rest];
+  // Render one titled panel to { plain, colored } rows sized to `pw` visible columns.
+  // `plain` (no ANSI) is what we measure/pad against; `colored` is what we print.
+  const panel = (title, groups) => (pw) => {
+    const keyW = Math.max(...groups.flatMap((g) => g.items.map((i) => i.keys.length)));
+    const descW = Math.max(4, pw - 2 - keyW - 2);               // 2 indent + key + 2 gap + desc
+    const rows = [{ plain: title, colored: BOLD + GREEN + title + RESET }];
+    for (const g of groups) {
+      rows.push({ plain: '', colored: '' });
+      rows.push({ plain: '  ' + g.head, colored: '  ' + BOLD + DGREEN + g.head + RESET });
+      for (const it of g.items) {
+        const gap = ' '.repeat(keyW - it.keys.length + 2);
+        const d = truncate(it.desc || it.label, descW);
+        rows.push({ plain: '  ' + it.keys + gap + d,
+          colored: '  ' + CYAN + it.keys + RESET + gap + GREEN + d + RESET });
+      }
+    }
+    return rows;
   };
-  const ctx = (s) => BOLD + GREEN + '  ' + s + RESET;            // big context header
-  const sub = (s) => '   ' + BOLD + DGREEN + s + RESET;         // dim sub-section header
+  const mkLeft = panel('IN AN AGENT WINDOW', leftGroups);
+  const mkRight = panel('ON THE HOME DASHBOARD', rightGroups);
 
   const L = [];
   L.push(BOLD + GREEN + '  KEYBOARD SHORTCUTS' + RESET);
   L.push('  ' + DGREEN + 'press Alt+S again, or any other key, to close' + RESET);
   L.push('');
-  L.push(ctx('IN AN AGENT WINDOW'));
-  for (const sec of sectionsOf(IN_TAB)) {
-    L.push(sub(sec));
-    for (const it of IN_TAB.filter((i) => i.section === sec)) L.push(...row(it));
-  }
-  L.push('');
-  L.push(ctx('ON THE HOME DASHBOARD'));
-  for (const grp of DASHBOARD) {
-    L.push(sub(grp.row));
-    for (const it of grp.items) L.push(...row(it));
+
+  const TWO_COL_MIN = 88;
+  if (width >= TWO_COL_MIN) {
+    const pw = Math.floor((width - 3) / 2);                     // two panels + a 3-space gutter
+    const left = mkLeft(pw), right = mkRight(pw);
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+      const l = left[i] || { plain: '', colored: '' };
+      const r = right[i] || { plain: '', colored: '' };
+      L.push(l.colored + ' '.repeat(Math.max(0, pw - l.plain.length)) + '   ' + r.colored);
+    }
+  } else {
+    for (const row of mkLeft(width)) L.push(row.colored);
+    L.push('');
+    for (const row of mkRight(width)) L.push(row.colored);
   }
   return L;
 }

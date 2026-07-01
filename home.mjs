@@ -49,6 +49,20 @@ function cloneAllPath() { return path.join(appDir(), 'clone-all.mjs'); }
 // works wherever this folder lives. (cc-default.kdl, the Home tab, stays static.)
 const CELL_ASPECT = 2.0;   // a terminal cell is roughly twice as tall as it is wide
 
+// Launch options — the model + effort each spawned `claude` runs with, chosen on Home
+// (cycle with [m] / [e]) and threaded through to every pane via --model / --effort.
+// MODELS use the short CLI ALIASES on purpose: an alias always resolves to the latest
+// build of that model, so this list never goes stale as full model IDs change. Fable is
+// back in the lineup here (the dashboard previously passed no --model at all, which is
+// why it "wouldn't switch"). Effort levels match the `claude` CLI's --effort values.
+const MODELS = [
+  { id: 'opus',   label: 'Opus' },
+  { id: 'sonnet', label: 'Sonnet' },
+  { id: 'haiku',  label: 'Haiku' },
+  { id: 'fable',  label: 'Fable' },
+];
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
 // Pick a balanced rows x cols grid whose panes are nearest to square for a window
 // `cols` chars wide and `rows` chars tall. Pure + deterministic (unit-testable).
 function chooseGrid(n, cols, rows) {
@@ -72,11 +86,11 @@ function rowCounts(n, r) {
 
 // The agent-grid KDL (the part of the tab above the shortcut strip). Each row is a
 // left-to-right vertical split; rows are stacked with an outer horizontal split.
-function gridKdl(n, rows) {
+function gridKdl(n, rows, model, effort) {
   let k = 1;
   const rowToKdl = (cnt) => {
     const panes = [];
-    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="claude" name="Claude ${k}" { args "--dangerously-skip-permissions"; }`);
+    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="claude" name="Claude ${k}" { args "--dangerously-skip-permissions" "--model" "${model}" "--effort" "${effort}"; }`);
     if (cnt === 1) return '                ' + panes[0];
     return '                pane split_direction="vertical" {\n'
       + panes.map((p) => '                    ' + p).join('\n')
@@ -87,9 +101,9 @@ function gridKdl(n, rows) {
   return '                pane split_direction="horizontal" {\n' + body + '\n                }';
 }
 
-function genLayout(n, app) {
+function genLayout(n, app, model = 'opus', effort = 'xhigh') {
   const { rows } = chooseGrid(n, termCols(), termRows());
-  return `// ${n} Claude agent${n === 1 ? '' : 's'} — generated for this window (balanced ${rows}-row grid). Alt+S reveals shortcuts.
+  return `// ${n} Claude agent${n === 1 ? '' : 's'} (${model}/${effort}) — generated for this window (balanced ${rows}-row grid). Alt+S reveals shortcuts.
 layout {
     default_tab_template {
         pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
@@ -97,7 +111,7 @@ layout {
     }
     tab {
         pane split_direction="horizontal" {
-${gridKdl(n, rows)}
+${gridKdl(n, rows, model, effort)}
                 pane size=1 borderless=true command="node" { args "${app}/hintbar.mjs"; }
         }
     }
@@ -105,11 +119,11 @@ ${gridKdl(n, rows)}
 `;
 }
 
-function layoutPath(n) {
+function layoutPath(n, model = 'opus', effort = 'xhigh') {
   const app = appDir().replace(/\\/g, '/');
   const genDir = path.join(stateRoot(), 'gen');
   const outFile = path.join(genDir, 'claude-' + n + '.kdl');
-  try { fs.mkdirSync(genDir, { recursive: true }); fs.writeFileSync(outFile, genLayout(n, app), 'utf8'); } catch { /* fall through */ }
+  try { fs.mkdirSync(genDir, { recursive: true }); fs.writeFileSync(outFile, genLayout(n, app, model, effort), 'utf8'); } catch { /* fall through */ }
   return outFile.replace(/\\/g, '/');
 }
 const AGENT_STALE_MS = 120 * 1000;
@@ -185,6 +199,8 @@ const state = {
   entries: [],
   dirSel: 0,
   count: 1,
+  modelIdx: 0,                              // index into MODELS (default: Opus)
+  effortIdx: Math.max(0, EFFORTS.indexOf('xhigh')),   // index into EFFORTS (default: xhigh)
   focus: 'dirs',
   subSel: 0,
   subParents: [],
@@ -426,6 +442,7 @@ function checkLaunchAllowed(now, requested, st = launchGuard) {
 
 function launch() {
   const n = state.count, dir = launchTarget(), name = path.basename(dir) || dir;
+  const model = MODELS[state.modelIdx] || MODELS[0], effort = EFFORTS[state.effortIdx] || 'xhigh';
   const now = Date.now();
   const gate = checkLaunchAllowed(now, n);
   if (!gate.ok) {
@@ -437,14 +454,15 @@ function launch() {
   }
   // Stamp the time BEFORE spawning so a failed/slow spawn still rate-limits the next press.
   launchGuard.lastAt = now;
-  const args = ['action', 'new-tab', '--layout', layoutPath(n), '--cwd', dir, '--name', name];
+  const args = ['action', 'new-tab', '--layout', layoutPath(n, model.id, effort), '--cwd', dir, '--name', name];
   let res;
   try { res = spawnSync('zellij', args, { encoding: 'utf8' }); }
   catch (e) { setStatus('Launch failed: ' + asciiSafe(e && e.message), 'error'); return; }
   if (res.error) { setStatus(res.error.code === 'ENOENT' ? 'zellij not found on PATH' : 'Launch error: ' + asciiSafe(res.error.message), 'error'); return; }
   if (res.status !== 0) { setStatus('zellij returned error: ' + truncate(asciiSafe((res.stderr || res.stdout || '').toString().trim().split('\n').pop() || ''), 60), 'error'); return; }
   launchGuard.panes += n;   // count only panes that actually spawned
-  setStatus('Launched ' + n + ' agent' + (n === 1 ? '' : 's') + ' in ' + asciiSafe(name) + ' (switch back with Alt+[ )', 'ok');
+  setStatus('Launched ' + n + ' ' + model.label + ' agent' + (n === 1 ? '' : 's') + ' in ' + asciiSafe(name) +
+    '  (switch windows: Alt+] / Alt+[ or click a tab)', 'ok');
 }
 function gitPush() {
   // Sync EVERYTHING under the projects root (not just the folder you're browsing)
@@ -609,6 +627,9 @@ function render() {
     GREEN + ' Claude agent' + (state.count === 1 ? '' : 's') + ' in: ' + RESET + BGREEN + truncate(asciiSafe(launchName), 22) + RESET);
   lines.push('  ' + GREEN + 'Step 1: press a number ' + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' = how many' + RESET +
     DGREEN + ' (now: ' + RESET + BOLD + BGREEN + state.count + RESET + DGREEN + ')' + RESET + GREEN + '    Step 2: press ' + RESET + keyc('Enter'));
+  lines.push('  ' + keyc('m') + GREEN + ' model: ' + RESET + BOLD + BGREEN + pad((MODELS[state.modelIdx] || MODELS[0]).label, 7) + RESET +
+    '   ' + keyc('e') + GREEN + ' effort: ' + RESET + BOLD + BGREEN + (EFFORTS[state.effortIdx] || 'xhigh') + RESET +
+    DGREEN + '   (press to cycle)' + RESET);
   lines.push('  ' + DGREEN + 'in a tab, switch: ' + RESET + keyc('Alt+arrows') + GREEN + ' between agents' + RESET + DGREEN + ' . ' + RESET +
     keyc('Alt+[') + keyc('Alt+]') + GREEN + ' between tabs' + RESET + DGREEN + '  (focused agent is highlighted)' + RESET);
   lines.push('  ' + DGREEN + 'in a tab, manage: ' + RESET + keyc('Alt+a') + GREEN + ' add' + RESET + DGREEN + ' . ' + RESET +
@@ -690,7 +711,7 @@ function render() {
   const renderItems = (items) => items.map((it) => keyc(it.keys) + GREEN + ' ' + it.label + RESET).join(C);
   lines.push(sep);
   for (const grp of DASHBOARD) {
-    lines.push(BOLD + BGREEN + pad(grp.row, 7) + RESET + renderItems(grp.items));
+    lines.push(BOLD + BGREEN + pad(grp.row, 7) + RESET + renderItems(grp.items.filter((it) => !it.overlayOnly)));
   }
   // WINDOW row = the in-tab keys; width-fit (essentials kept) so it never wraps.
   const winFit = fitGroups(IN_TAB, W - 9, ' | ', (g) => '[' + g.keys + '] ' + g.label);
@@ -755,6 +776,7 @@ function renderHelp(W) {
   L.push('');
   L.push(h('3. Launching and managing Claude agents'));
   L.push('   ' + g('Press a number ') + k('1') + g('-') + k('8') + g(' to choose how many agents, then press ') + k('Enter') + g('.'));
+  L.push('   ' + g('Pick the model with ') + k('m') + g(' and the effort level with ') + k('e') + g(' first (Opus / Sonnet / Haiku / Fable).'));
   L.push('   ' + g('They open in a new window (tab) that runs in the folder you have selected.'));
   L.push('   ' + g('Each agent has a titled border ("Claude 1", "Claude 2", ...); the one you are'));
   L.push('   ' + g('typing into is highlighted. Move between them with ') + k('Alt+Arrow keys') + g('.'));
@@ -818,6 +840,8 @@ function onPrintable(ch) {
   if (/[1-8]/.test(ch)) { state.count = parseInt(ch, 10); setStatus('', 'info'); redraw(); return; }
   if (ch === '+' || ch === '=') { state.count = Math.min(8, state.count + 1); redraw(); return; }
   if (ch === '-' || ch === '_') { state.count = Math.max(1, state.count - 1); redraw(); return; }
+  if (ch === 'm') { state.modelIdx = (state.modelIdx + 1) % MODELS.length; setStatus('', 'info'); redraw(); return; }
+  if (ch === 'e') { state.effortIdx = (state.effortIdx + 1) % EFFORTS.length; setStatus('', 'info'); redraw(); return; }
   if (ch === 'c') { cloneAll(); redraw(); return; }
   if (ch === 'g') { gitPush(); redraw(); return; }
   if (ch === 'n') { state.prompt = 'newfolder'; state.promptValue = ''; setStatus('', 'info'); redraw(); return; }

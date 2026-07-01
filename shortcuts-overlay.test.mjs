@@ -53,10 +53,14 @@ for (const it of homeItems) {
 for (const sec of [...new Set(IN_TAB.map((i) => i.section))]) {
   check(`overlay shows the "${sec}" sub-section`, sec && text.includes(sec));
 }
-// Long descriptions wrap to the requested width (no line blows past it once ANSI is
-// stripped), so a narrow overlay stays readable instead of running off the edge.
-const narrow = stripAnsi(buildSheet(64).join('\n')).split('\n');
-check('descriptions wrap to the overlay width', narrow.every((l) => l.length <= 64), `${Math.max(...narrow.map((l) => l.length))}`);
+// No line ever exceeds the overlay width once ANSI is stripped: over-long descriptions
+// are truncated and keys are never wrapped, so the table stays readable instead of
+// running off the edge. Checked narrow (stacked single column) AND wide (the two-column
+// side-by-side path), since both are live layouts.
+for (const w of [64, 120]) {
+  const lines = stripAnsi(buildSheet(w).join('\n')).split('\n');
+  check(`no overlay line exceeds ${w} cols`, lines.every((l) => l.length <= w), `${Math.max(...lines.map((l) => l.length))}`);
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
