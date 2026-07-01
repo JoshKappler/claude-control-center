@@ -3,14 +3,19 @@
 // `default_layout "cc-default"` resolves it by name; the launcher creates the
 // session via `zellij attach -c claude-cc`.
 //
-// NO tab-bar on Home: the built-in zellij tab-bar plugin hard-codes the session
-// name ("Zellij (claude-cc)") and the swap-layout name ("BASE") with no option to
-// hide them, and a custom status plugin (zjstatus) would break the zero-dep rule.
-// Home doesn't need a tab strip anyway — you ARE home; the dashboard names itself.
-// Switch to your agent windows with Alt+] / Alt+H. Agent tabs keep their tab strip
-// (seeing the open windows there is useful) — see home.mjs genLayout().
+// Home carries the SAME tab strip the agent tabs do (zellij:tab-bar). Zellij draws
+// the strip per-tab, so a tab without one shows no strip at all while it is focused.
+// Home used to omit it — which made switching to Home look like it closed every
+// other tab: the strip vanished and the open agent tabs only "reappeared" once focus
+// landed on a tab that HAD a strip (e.g. a freshly launched one). They were never
+// closed, just hidden. Keeping the strip here means open tabs are always visible.
+// The plugin prefixes the session name ("Zellij (claude-cc)") — a small cosmetic
+// label, and a fair trade for never losing sight of your windows.
 layout {
     tab name="Home" focus=true {
+        // Tab strip on top (1 row), matching the agent tabs, so every open window is
+        // always visible from Home too. Switch with Alt+] / Alt+H, or click a tab.
+        pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
         // borderless: keep the dashboard frameless even though pane_frames is on
         // (frames are for the agent tabs, to show which Claude is focused).
         pane borderless=true command="node" {
