@@ -13,44 +13,44 @@
 // `label` short (it shares the cramped footer); put the detail in `desc`.
 export const IN_TAB = [
   { keys: 'Alt+Arrows',       label: 'move between agents',        section: 'MOVE & RESIZE',
-    desc: 'Move the focus between the Claude agents inside this window. The highlighted border shows which agent your typing goes to; focus never leaves the window.' },
+    desc: 'move focus between the Claude agents in this window' },
   { keys: 'Alt+[ / Alt+]',    label: 'previous / next window',     section: 'MOVE & RESIZE',
-    desc: 'Step to the previous or next agent window (a Zellij tab). Each window is a separate job, so this flips between them without disturbing the agents inside.' },
+    desc: 'jump to the previous / next agent window (a whole job)' },
   { keys: 'Alt+H',            label: 'jump to the Home dashboard', section: 'MOVE & RESIZE',
-    desc: 'Jump straight back to the Home dashboard — always the first window — where you browse folders, sync repos, and launch new agents.' },
+    desc: 'go back to the Home dashboard (always the first window)' },
   { keys: 'Alt+Shift+Arrows', label: 'resize the focused agent',  section: 'MOVE & RESIZE',
-    desc: 'Resize the focused agent, growing it toward that edge. Same fingers as Alt+Arrows for moving focus — just add Shift to resize instead of move.' },
+    desc: 'resize the focused agent, growing it toward that edge' },
   { keys: 'Alt+A',            label: 'add another agent here',     section: 'AGENTS & WINDOWS',
-    desc: 'Add another Claude agent in this window, splitting the space with the agents already here. Every agent in a window shares one working tree.' },
+    desc: 'add another Claude agent alongside the ones already here' },
   { keys: 'Ctrl+Alt+W',       label: 'close this one agent',       section: 'AGENTS & WINDOWS',
-    desc: 'Deliberately close just the focused agent. Closing is the ONLY way an agent dies — moving between agents or adding one can never kill it by accident.' },
+    desc: 'close just the focused agent (the deliberate way)' },
   { keys: 'Ctrl+Alt+Q',       label: 'close this whole window',    section: 'AGENTS & WINDOWS',
-    desc: 'Close this entire window and every agent in it at once. Use Ctrl+Alt+W instead when you only want to close the single focused agent.' },
+    desc: 'close this whole window and every agent inside it at once' },
   { keys: 'Alt+I',            label: 'subagent monitor',           section: 'DISCOVER & ESCAPE',
-    desc: 'Open the subagent monitor for this window in a floating overlay, so you can see what each agent has spawned. Press a key to close it.' },
+    desc: 'open the subagent monitor for this window' },
   { keys: 'Ctrl+G',           label: 'pass all keys to Claude',    section: 'DISCOVER & ESCAPE',
-    desc: 'Lock the window so every keystroke passes straight to Claude and Zellij stops intercepting shortcuts. Press Ctrl+G again to unlock and get the shortcuts back.' },
+    desc: 'send keys straight to Claude; Ctrl+G again to unlock' },
   { keys: 'Alt+S',            label: 'show / hide this list',      section: 'DISCOVER & ESCAPE',
-    desc: 'Show or hide this shortcut list from any window. Press Alt+S again — or any other key — to close it. It works on the Home dashboard too.' },
+    desc: 'show or hide this list — press Alt+S again to close it' },
 ];
 
 // Dashboard (home.mjs) keys — parser-bound inside home.mjs itself. Short `label` for
-// the Home footer; fuller `desc` for the Alt+S overlay.
+// the Home footer; a one-line `desc` for the Alt+S overlay.
 export const DASHBOARD = [
   { row: 'MOVE', items: [
-    { keys: 'Up/Dn', label: 'move bar',    desc: 'Move the selection bar up and down the focused list.' },
-    { keys: '->',    label: 'open folder', desc: 'Open the highlighted folder to browse the projects inside it.' },
-    { keys: '<-',    label: 'back',        desc: 'Go back up to the parent folder.' },
-    { keys: 'Tab',   label: 'switch list', desc: 'Switch focus between the folder list and the running-subagents list.' },
+    { keys: 'Up/Dn', label: 'move bar',    desc: 'move the selection bar up and down the list' },
+    { keys: '->',    label: 'open folder', desc: 'open the highlighted folder to see what is inside' },
+    { keys: '<-',    label: 'back',        desc: 'go back up to the parent folder' },
+    { keys: 'Tab',   label: 'switch list', desc: 'switch between the folder list and the subagents list' },
   ] },
   { row: 'DO', items: [
-    { keys: '1-8',   label: '#agents',    desc: 'Pick how many Claude agents to launch into the selected folder — 1 through 8, all sharing one working tree.' },
-    { keys: 'Enter', label: 'launch',     desc: 'Launch the chosen number of agents into the selected folder, opening them in a new window.' },
-    { keys: 'n',     label: 'new folder', desc: 'Create a new sub-folder inside the current folder.' },
-    { keys: 'g',     label: 'push',       desc: 'Push every repo under the projects root to GitHub, each on its own current branch.' },
-    { keys: 'c',     label: 'pull',       desc: 'Pull every repo under the projects root — cloning what is missing, fast-forwarding the rest.' },
-    { keys: '?',     label: 'help',       desc: 'Show the built-in help for the Home dashboard.' },
-    { keys: 'q',     label: 'quit',       desc: 'Quit the control center, closing the whole session and every agent running in it.' },
+    { keys: '1-8',   label: '#agents',    desc: 'choose how many agents to launch (1 to 8, one working tree)' },
+    { keys: 'Enter', label: 'launch',     desc: 'launch that many agents into the selected folder' },
+    { keys: 'n',     label: 'new folder', desc: 'create a new sub-folder inside the current one' },
+    { keys: 'g',     label: 'push',       desc: 'push every repo to GitHub, each on its current branch' },
+    { keys: 'c',     label: 'pull',       desc: 'pull every repo — clone what is missing, fast-forward the rest' },
+    { keys: '?',     label: 'help',       desc: 'show the built-in Home dashboard help' },
+    { keys: 'q',     label: 'quit',       desc: 'quit — closes the session and every agent in it' },
   ] },
 ];
 

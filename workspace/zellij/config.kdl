@@ -56,12 +56,11 @@ keybinds {
     shared_except "locked" {
         // Alt+s: reveal EVERY shortcut for the current page in a floating overlay
         // (plain English, no truncation). It TOGGLES — press Alt+s again (or any other
-        // key) to close it; cheatsheet.mjs uses a marker file so a second press
-        // collapses the overlay instead of stacking another on top. `close_on_exit`
-        // makes each overlay pane close ITSELF when its node process exits, so closing
-        // never depends on focus and can never touch a neighbouring agent pane. This is
-        // THE discovery key — the thin bar under the tab strip advertises it everywhere.
-        bind "Alt s" { Run "node" "{{APP}}/cheatsheet.mjs" { floating true; name "shortcuts"; close_on_exit true; }; }
+        // key) to close it. cheatsheet.mjs drops a marker file so a second press
+        // collapses the open overlay instead of stacking another on top, and closes the
+        // pane itself via `zellij action close-pane`. This is THE discovery key — the
+        // thin bar under the tab strip advertises it on every tab.
+        bind "Alt s" { Run "node" "{{APP}}/cheatsheet.mjs" { floating true; name "shortcuts"; }; }
         // Alt+a: add another Claude agent in this tab (new pane running `claude`).
         bind "Alt a" { Run "claude" "--dangerously-skip-permissions"; }
         // Alt+h: jump straight back to the Home dashboard (always the first tab).
