@@ -10,7 +10,19 @@
 //
 // Run: node render.test.mjs   (zero deps; exits non-zero on failure)
 
-import { __renderFrame } from './home.mjs';
+import fs2 from 'node:fs';
+import os2 from 'node:os';
+import path2 from 'node:path';
+
+// Hermetic folder list: home.mjs reads state.cwd from CC_ROOT at import time, and
+// __renderFrame re-lists it every frame. Without this the assertions below counted
+// the REAL projects folder — on a machine with few projects, "folder list exceeds
+// the old 8-row cap" failed with the layout code fully correct.
+const SYNTH_ROOT = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'cc-render-test-'));
+for (let i = 0; i < 40; i++) fs2.mkdirSync(path2.join(SYNTH_ROOT, 'folder-' + String(i).padStart(2, '0')));
+process.env.CC_ROOT = SYNTH_ROOT;
+const { __renderFrame } = await import('./home.mjs');
+process.on('exit', () => { try { fs2.rmSync(SYNTH_ROOT, { recursive: true, force: true }); } catch { /* */ } });
 
 let failures = 0;
 function check(name, cond, extra) {

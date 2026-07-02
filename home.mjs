@@ -364,6 +364,18 @@ function sampleSystem() {
 }
 
 // ---------- subagents ----------
+// A record only leaves "running" via a SubagentStop hook; if the agent pane was
+// closed or crashed mid-subagent, that hook never fires and the record would show
+// as running FOREVER. Treat a running record with no update for 30 min as dead —
+// the PostToolUse hook bumps updatedAt on every tool call, so genuinely active
+// subagents stay comfortably inside the window.
+const SUB_STALE_SEC = 30 * 60;
+function subRunning(obj) {
+  if (!obj || obj.status !== 'running') return false;
+  const upd = typeof obj.updatedAt === 'number' ? obj.updatedAt : 0;
+  const updSec = upd > 1e12 ? Math.floor(upd / 1000) : upd;
+  return Math.floor(Date.now() / 1000) - updSec < SUB_STALE_SEC;
+}
 function scanSubagents() {
   const parents = [];
   let pdirs;
@@ -379,7 +391,7 @@ function scanSubagents() {
       let obj;
       try { obj = JSON.parse(fs.readFileSync(path.join(pdir, f), 'utf8').replace(/^﻿/, '')); } catch { continue; }
       total++;
-      if (obj && obj.status === 'running') { running++; if (obj.label) lastLabel = obj.label; else if (obj.agentType) lastLabel = obj.agentType; }
+      if (subRunning(obj)) { running++; if (obj.label) lastLabel = obj.label; else if (obj.agentType) lastLabel = obj.agentType; }
     }
     if (running > 0) parents.push({ parentId, running, total, label: lastLabel });
   }
@@ -479,6 +491,7 @@ function gitPush() {
   if (!parsed || !Array.isArray(parsed.repos)) { setStatus('push: unexpected output', 'error'); return; }
   const pushed = parsed.repos.filter((r) => r.pushed).length;
   const errs = parsed.repos.filter((r) => r.error).length;
+  const dirty = parsed.repos.filter((r) => r.dirty).length;
   state.sync.lastPushAt = Date.now();
   writeSync({ lastPushAt: state.sync.lastPushAt });
   const blocked = parsed.repos.filter((r) => r.error && /\b(fetch first|non-fast-forward|rejected|behind)\b/i.test(String(r.error))).length;
@@ -486,6 +499,9 @@ function gitPush() {
     : 'PUSH done: uploaded ' + pushed + ' repo' + (pushed === 1 ? '' : 's') + ' to GitHub';
   if (blocked) msg += '  -  ' + blocked + ' skipped (GitHub has newer changes; press [c] to pull first, nothing was overwritten)';
   else if (errs) msg += '  -  ' + errs + ' error(s)';
+  // Uncommitted work is NOT uploaded by a push — say so, or "PUSH done" quietly
+  // lies and that work exists on this machine only until it's committed.
+  if (dirty) msg += '  -  ' + dirty + ' with uncommitted changes (not uploaded; commit first)';
   setStatus(msg, (errs && !blocked) ? 'error' : 'ok');
 }
 function cloneAll() {
@@ -502,13 +518,19 @@ function cloneAll() {
   const cloned = parsed.repos.filter((r) => r.action === 'cloned').length;
   const updated = parsed.repos.filter((r) => r.action === 'updated').length;
   const errs = parsed.repos.filter((r) => r.action === 'error').length;
+  // Repos PULL refuses to touch (dirty tree, diverged from GitHub, detached HEAD)
+  // stay stale until a human looks — surfacing them is what keeps "it synced fine"
+  // from drifting into a giant merge weeks later.
+  const stale = parsed.repos.filter((r) => r.action === 'skipped' && /dirty|no-ff|detached/.test(String(r.error))).length;
   state.sync.lastCloneAt = Date.now();
   writeSync({ lastCloneAt: state.sync.lastCloneAt });
   const parts = [];
   if (cloned) parts.push('downloaded ' + cloned + ' new');
   if (updated) parts.push('updated ' + updated);
   const body = parts.length ? parts.join(', ') : 'everything already up to date';
-  setStatus('PULL done: ' + body + '  (' + parsed.repos.length + ' repo' + (parsed.repos.length === 1 ? '' : 's') + ' checked)' + (errs ? ', ' + errs + ' error(s)' : ''), errs ? 'error' : 'ok');
+  setStatus('PULL done: ' + body + '  (' + parsed.repos.length + ' repo' + (parsed.repos.length === 1 ? '' : 's') + ' checked)'
+    + (stale ? '  -  ' + stale + ' left alone (dirty or diverged; needs a manual look)' : '')
+    + (errs ? ', ' + errs + ' error(s)' : ''), errs ? 'error' : 'ok');
 }
 // Silent, windowless repo sync kicked off when Home opens, so pressing the global
 // hotkey shows the control center INSTANTLY and the "pull everything from GitHub"
@@ -534,13 +556,15 @@ function startBackgroundSync() {
     if (parsed && Array.isArray(parsed.repos)) {
       const cloned = parsed.repos.filter((r) => r.action === 'cloned').length;
       const updated = parsed.repos.filter((r) => r.action === 'updated').length;
+      const stale = parsed.repos.filter((r) => r.action === 'skipped' && /dirty|no-ff|detached/.test(String(r.error))).length;
       state.sync.lastCloneAt = Date.now();
       writeSync({ lastCloneAt: state.sync.lastCloneAt });
       const parts = [];
       if (cloned) parts.push('downloaded ' + cloned + ' new');
       if (updated) parts.push('updated ' + updated);
       setStatus('Auto-sync done: ' + (parts.length ? parts.join(', ') : 'everything already up to date') +
-        '  (' + parsed.repos.length + ' repo' + (parsed.repos.length === 1 ? '' : 's') + ' checked)', 'ok');
+        '  (' + parsed.repos.length + ' repo' + (parsed.repos.length === 1 ? '' : 's') + ' checked)' +
+        (stale ? '  -  ' + stale + ' left alone (dirty or diverged; needs a manual look)' : ''), 'ok');
     } else {
       setStatus('', 'info');
     }

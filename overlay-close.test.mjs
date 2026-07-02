@@ -53,8 +53,13 @@ const B = open();                                     // first press → opens
 await sleep(500);
 check('second overlay opened', exists());
 const C = open();                                     // second press → toggle-close
-check('toggle press (C) exits cleanly', (await new Promise((r) => C.on('exit', r))) === 0);
-check('open overlay (B) collapses on toggle', (await new Promise((r) => B.on('exit', r))) === 0);
+// Attach BOTH exit listeners before awaiting anything: B collapses on its own
+// 150ms marker poll, so it can exit while C's exit is still being awaited — a
+// listener attached after the once-only 'exit' event fired would hang forever.
+const cExit = new Promise((r) => C.on('exit', r));
+const bExit = new Promise((r) => B.on('exit', r));
+check('toggle press (C) exits cleanly', (await cExit) === 0);
+check('open overlay (B) collapses on toggle', (await bExit) === 0);
 await sleep(150);
 check('marker gone after toggle (no stacking)', !exists());
 

@@ -33,6 +33,16 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.local/share/claude-cc/hooks/subagent-track.mjs"
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [

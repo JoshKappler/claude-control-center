@@ -54,7 +54,7 @@ export const DASHBOARD = [
     { keys: 'g',     label: 'push',       desc: 'push every repo to GitHub' },
     { keys: 'c',     label: 'pull',       desc: 'pull every repo from GitHub' },
     { keys: '?',     label: 'help',       desc: 'show the dashboard help' },
-    { keys: 'q',     label: 'quit',       desc: 'quit (closes all agents)' },
+    { keys: 'q',     label: 'quit',       desc: 'quit the dashboard (agents keep running)' },
   ] },
 ];
 

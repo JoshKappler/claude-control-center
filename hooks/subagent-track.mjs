@@ -2,8 +2,11 @@
 // subagent-track.mjs — Claude Control Center subagent activity hook (WP3).
 //
 // Registered in ~/.claude/settings.json for SubagentStart, SubagentStop,
-// TaskCreated, TaskCompleted, PreToolUse, PostToolUse. Reads the hook payload
-// JSON on stdin and maintains one file per subagent:
+// TaskCreated, TaskCompleted and PostToolUse (PostToolUse doubles as the
+// liveness heartbeat: it bumps updatedAt on every tool call, which is what lets
+// readers age out "running" records whose Stop hook never fired; PreToolUse is
+// deliberately not wired — same info, twice the hook spawns). Reads the hook
+// payload JSON on stdin and maintains one file per subagent:
 //   <stateRoot>/subagents/<session_id>/<agent_id>.json
 // read live by inspector.mjs (and Home).
 //
@@ -142,7 +145,12 @@ function readRecord(file) {
 
 function writeRecord(file, rec) {
   try {
-    fs.writeFileSync(file, JSON.stringify(rec, null, 2), 'utf8');
+    // Atomic-ish write (tmp then rename), matching statusline.mjs: inspector.mjs
+    // and home.mjs poll these files every second, and a half-written JSON made a
+    // running subagent flicker out of the lists for that tick.
+    const tmp = file + '.' + process.pid + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(rec, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
   } catch {
     /* ignore */
   }

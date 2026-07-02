@@ -13,17 +13,20 @@ mouse_mode true
 default_layout "cc-default"   // the control center's Home tab; `zellij attach -c claude-cc` creates the session with this
 show_startup_tips false
 copy_on_select true
-// macOS: copy selections straight to the system clipboard via pbcopy. Without this,
-// zellij falls back to OSC52, which doesn't reliably reach the Mac clipboard through
-// WezTerm, so copy_on_select looked dead. (The live config is deployed by chezmoi,
-// where this line is gated to darwin; kept here too so the two sources don't drift.)
-copy_command "pbcopy"
-// Close the WHOLE session (and every CLI/agent pane in it) when the window is
-// closed, instead of leaving it running detached in the background. No lingering
-// claude-cc session to clean up; the next launch always starts fresh.
-on_force_close "quit"
-// Don't persist/resurrect dead sessions to disk either.
-session_serialization false
+// macOS: copy selections straight to the system clipboard via pbcopy — OSC52 doesn't
+// reliably reach the Mac clipboard through WezTerm. On Windows pbcopy doesn't exist,
+// so install.mjs renders this token to the pbcopy line on macOS and to nothing on
+// Windows (where the OSC52 default works fine in WezTerm).
+{{COPY_COMMAND}}
+// SESSION DURABILITY — the 2026-07-01 incident rule: no keystroke, client crash, or
+// window close may ever irrecoverably kill a session with agents in it. Closing the
+// window only DETACHES; the session (and every agent) keeps running, and the next
+// launch reattaches to it. Ending a session is always deliberate: close its tabs
+// (Ctrl+Alt+Q) or run `zellij delete-session claude-cc --force`.
+on_force_close "detach"
+// Persist sessions to disk too, so even a zellij-server crash or reboot leaves a
+// resurrectable snapshot instead of four lost hours.
+session_serialization true
 
 // Green-on-black phosphor theme to match WezTerm's Homebrew scheme.
 themes {

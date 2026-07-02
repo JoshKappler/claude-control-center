@@ -65,6 +65,30 @@ always know which agent has focus. The green **shortcut bar** pinned at the
 
 Click the **Home** tab (leftmost) to come back to the dashboard. Casual navigation
 never closes an agent — closing is always a deliberate `Ctrl+Alt+w` / `Ctrl+Alt+q`.
+
+## The session is durable — nothing can silently kill it
+
+The window is just a **view** of the `claude-cc` Zellij session; the agents live in
+the session, not the window. This is the rule (born of a 2026-07-01 incident where a
+mid-refactor session was unrecoverably lost):
+
+- **Closing the window — or the client crashing, or a stray keystroke kicking you
+  out — only detaches.** Every agent keeps running exactly where it was.
+- **Reopening (`Ctrl+Alt+C`) reattaches** to the existing session with everything
+  intact. Only a genuinely missing session is created fresh.
+- **Sessions are serialized to disk** (`session_serialization true`), so even a
+  zellij crash or reboot leaves a resurrectable snapshot.
+- **Nothing deletes a session automatically.** Ending one is always deliberate:
+  close its tabs (`Ctrl+Alt+q`), or run `zellij delete-session claude-cc --force`.
+  If a launch ever fails against a stuck session, the launcher *asks* before
+  offering to kill it — it never just does it.
+- `session-durability.test.mjs` pins all of this; a change that reintroduces an
+  automatic kill fails the suite.
+
+One consequence: **zellij config changes (keybinds/layouts) only apply to NEW
+sessions.** After `node install.mjs`, finish or park your agents, end the session
+deliberately, then reopen — just closing and reopening the window reattaches to the
+old session with the old config.
 Zellij's default mode keys (`Ctrl+h/p/n/t/s/o/b`) are unbound, so ordinary terminal
 keys like **Ctrl+Backspace** (delete word) pass straight through to Claude instead
 of opening a Zellij overlay.
@@ -75,12 +99,16 @@ an empty Subagents list.
 
 ## GitHub sync — what the buttons promise
 
-- **`g` PUSH** runs a plain `git push` on every repo under your projects root.
-  Git refuses a non-fast-forward push, so if another device already uploaded
-  newer work, yours is **skipped, never overwritten** — pull first, then push.
+- **`g` PUSH** runs a plain `git push` on every repo under your projects root that
+  has commits to upload. Git refuses a non-fast-forward push, so if another device
+  already uploaded newer work, yours is **skipped, never overwritten** — pull
+  first, then push. Repos with **uncommitted** changes are called out ("not
+  uploaded; commit first"), so PUSH can never silently leave your latest work
+  stranded on one machine. Repos with **no upstream** are flagged too.
 - **`c` PULL** clones anything missing and **fast-forwards** the rest. A dirty or
-  diverged repo is fetched but left alone. Your local commits and uncommitted
-  changes are **never discarded**.
+  diverged repo is fetched but left alone — and **reported** ("needs a manual
+  look"), so drift gets fixed while it is one commit, not a week of them. Your
+  local commits and uncommitted changes are **never discarded**.
 
 Both operate on `~/OneDrive/desktop/projects` and skip the `dotfiles` repo.
 
@@ -98,7 +126,9 @@ does the same thing on a schedule, with **no dashboard open**, and it self-updat
 this repo first so the control center keeps itself current across machines:
 
 1. `git pull --ff-only` on this repo (the meta bit — the tool updates itself).
-2. Run the freshly-pulled `clone-all.mjs` over the projects folder this repo sits
+2. If that pulled new commits, `node install.mjs` — so a config fix (keybinds,
+   layouts, settings) pushed from another machine reaches this one too.
+3. Run the freshly-pulled `clone-all.mjs` over the projects folder this repo sits
    in: clone anything new, fast-forward the rest, leave dirty/diverged repos alone.
 
 On macOS it is wired to launchd so it is hardwired into startup and always running:
@@ -110,8 +140,8 @@ bash macos/uninstall-sync-agent.sh    # stop + remove (repos/logs untouched)
 ```
 
 Watch it: `tail -f ~/.claude/state/cc/sync.log`. Each line is one tick, e.g.
-`self-update: ok | up-to-date=24 cloned=1 skipped=5`. The full last result is in
-`~/.claude/state/cc/sync-last.json`.
+`self-update: ok  |  config: deployed  |  up-to-date=24 cloned=1 skipped=5`. The
+full last result is in `~/.claude/state/cc/sync-last.json`.
 
 ## Files
 
@@ -123,9 +153,9 @@ Watch it: `tail -f ~/.claude/state/cc/sync.log`. Each line is one tick, e.g.
 | `shortcuts.mjs` | **Single source of truth** for advertised shortcut text. `cheatsheet.mjs` and `home.mjs` both render from it. |
 | `statusline.mjs` | statusLine for `~/.claude/settings.json`. Prints `model · ctx% · task` and writes `agents/<sessionId>.json`. |
 | `inspector.mjs` | Live subagent **monitor** — a 1s-refresh status table (type/label/last tool/elapsed) per subagent, opened in a Zellij floating pane. Shows metadata, not transcripts. |
-| `git-push-all.mjs` | `node git-push-all.mjs <root>` → pushes repos under `<root>` (excludes `dotfiles`), prints JSON. Never force-pushes. |
+| `git-push-all.mjs` | `node git-push-all.mjs <root>` → pushes repos under `<root>` with commits ahead (excludes `dotfiles`), prints JSON incl. `dirty` (uncommitted work a push can't upload). Never force-pushes. |
 | `clone-all.mjs` | `node clone-all.mjs <root>` → clones missing + `--ff-only` pulls all your GitHub repos. Finds clones **one level deep too** (e.g. `other/algora`) and updates them in place instead of re-cloning a top-level duplicate. Never discards local work. |
-| `sync-daemon.mjs` | **Always-on background sync.** Self-updates this repo (`git pull --ff-only`), then runs `clone-all.mjs` over the projects folder it lives in. Run on a schedule by the macOS LaunchAgent. Logs to `~/.claude/state/cc/sync.log`. |
+| `sync-daemon.mjs` | **Always-on background sync.** Self-updates this repo (`git pull --ff-only`), redeploys `workspace/` config via `install.mjs` when the pull brought commits, then runs `clone-all.mjs` over the projects folder it lives in. Run on a schedule by the macOS LaunchAgent. Logs to `~/.claude/state/cc/sync.log`. |
 | `macos/install-sync-agent.sh` | Installs `sync-daemon.mjs` as a LaunchAgent that runs at login and every 10 min. `macos/uninstall-sync-agent.sh` removes it. |
 | `hintbar.mjs` | A subtle dim one-row footnote at the bottom of each agent window: `Press Alt+S for keyboard shortcuts`. |
 | `cheatsheet.mjs` | The `Alt+S` overlay (floating pane): the **complete** shortcut list in plain English, grouped by context and sub-section. Renders from `shortcuts.mjs`. `Alt+S` **toggles** it (press again to close — it won't stack); any other key closes it too. |

@@ -5,17 +5,12 @@ REM Prepend the tool dirs so zellij/node/claude resolve even if the inherited
 REM PATH is thin (this propagates to the panes zellij spawns: node Home, claude).
 set "PATH=%LOCALAPPDATA%\Zellij;%ProgramFiles%\nodejs;%ProgramFiles%\GitHub CLI;%USERPROFILE%\.local\bin;%PATH%"
 
-REM Belt-and-suspenders: kill any stale claude-cc session left over from a
-REM previous window so opening ALWAYS starts fresh and nothing lingers in the
-REM background. (The session-watchdog normally ends it on window close; this
-REM covers the case where it didn't, e.g. before the AHK hotkey is reloaded.)
-REM Safe: launch.cmd only runs when no Control Center window is already open.
-zellij delete-session claude-cc --force >nul 2>&1
-
-REM Attach to the persistent "claude-cc" session, creating it (with the
-REM default_layout "cc-default" = the Home tab) if it doesn't exist yet. This is
-REM the canonical attach-or-create; do NOT use `-s NAME --layout` (0.44.3 treats
-REM that as an attach and exits with "session not found").
+REM SESSION DURABILITY (the 2026-07-01 incident rule): NEVER delete a session on
+REM launch. If a claude-cc session already exists — because the window was closed,
+REM the client crashed, or a keystroke kicked you out mid-refactor — `attach -c`
+REM RESUMES it with every agent intact. Only a genuinely missing session is created
+REM fresh (with default_layout "cc-default" = the Home tab). Do NOT use
+REM `-s NAME --layout` (0.44.3 treats that as an attach and exits "session not found").
 zellij attach -c claude-cc
 if %errorlevel%==0 goto :done
 
@@ -28,8 +23,11 @@ where zellij
 echo  where node    ^>
 where node
 echo.
-echo  This window is kept open so you can read the error above.
-echo  Press any key to close.
-pause >nul
+echo  If the session is stuck/corrupt you can start fresh, but that
+echo  DESTROYS it and every agent in it - only do this deliberately.
+choice /c KC /n /m "  Press K to kill the stuck session and start fresh, or C to close."
+if errorlevel 2 goto :done
+zellij delete-session claude-cc --force >nul 2>&1
+zellij attach -c claude-cc
 
 :done

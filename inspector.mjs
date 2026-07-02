@@ -103,8 +103,21 @@ function readChildren(parent) {
   return out;
 }
 
+// A record only leaves "running" via a SubagentStop hook; a killed/crashed agent
+// pane never sends one, so its records would count as running forever — polluting
+// the auto-pick and the picker with dead sessions. A running record untouched for
+// 30 min is treated as stale (PostToolUse bumps updatedAt on every tool call, so
+// live subagents refresh constantly).
+const SUB_STALE_SEC = 30 * 60;
+function isLiveRunning(rec) {
+  if (!rec || rec.status !== 'running') return false;
+  const upd = typeof rec.updatedAt === 'number' ? rec.updatedAt : 0;
+  const updSec = upd > 1e12 ? Math.floor(upd / 1000) : upd;
+  return Math.floor(Date.now() / 1000) - updSec < SUB_STALE_SEC;
+}
+
 function parentHasRunning(parent) {
-  return readChildren(parent).some((r) => r.status === 'running');
+  return readChildren(parent).some(isLiveRunning);
 }
 
 function fromPaneFile() {
@@ -150,7 +163,7 @@ async function resolveParent(argv) {
   process.stdout.write('Multiple parent sessions found:\n\n');
   ordered.forEach((p, i) => {
     const kids = readChildren(p);
-    const live = kids.filter((k) => k.status === 'running').length;
+    const live = kids.filter(isLiveRunning).length;
     process.stdout.write(`  ${i + 1}. ${p}   (${kids.length} subagents, ${live} running)\n`);
   });
   process.stdout.write('\n');
@@ -209,9 +222,9 @@ function render(parent) {
   lines.push('');
 
   const kids = readChildren(parent).sort((a, b) => {
-    // running first, then most-recently updated.
-    const ar = a.status === 'running' ? 0 : 1;
-    const br = b.status === 'running' ? 0 : 1;
+    // live running first, then most-recently updated.
+    const ar = isLiveRunning(a) ? 0 : 1;
+    const br = isLiveRunning(b) ? 0 : 1;
     if (ar !== br) return ar - br;
     return (b.updatedAt || 0) - (a.updatedAt || 0);
   });
@@ -229,7 +242,7 @@ function render(parent) {
         renderRow([
           k.agentType || '-',
           k.label || '-',
-          k.status || '-',
+          (k.status === 'running' && !isLiveRunning(k)) ? 'stale?' : (k.status || '-'),
           k.lastTool || '-',
           k.lastDetail || '-',
           fmtElapsed(k.startedAt),
@@ -239,7 +252,7 @@ function render(parent) {
   }
 
   lines.push('');
-  const running = kids.filter((k) => k.status === 'running').length;
+  const running = kids.filter(isLiveRunning).length;
   lines.push(`total ${kids.length}  ·  running ${running}  ·  ${new Date().toLocaleTimeString()}`);
 
   // Join with explicit CRLF-safe newline + clear-to-EOL so stale chars vanish.

@@ -11,18 +11,15 @@
 
 GridClass := "wezterm-claude-cc"
 ; Self-locating: this script lives in <repo>/workspace/windows/, so launch.cmd is
-; alongside it and session-watchdog.mjs is two levels up at the repo root. No
-; hardcoded install path — works wherever the repo is cloned.
+; alongside it. No hardcoded install path — works wherever the repo is cloned.
 LaunchCmd := A_ScriptDir "\launch.cmd"
 ; Resolve wezterm by full path so the launcher works regardless of the PATH it
 ; inherited (a bare `wezterm` fails if started from a thin-PATH context).
 WezExe := FileExist(A_ProgramFiles "\WezTerm\wezterm.exe") ? A_ProgramFiles "\WezTerm\wezterm.exe" : "wezterm"
-; Session watchdog: ends the claude-cc Zellij session when this window closes, so
-; it (and its CLI/agent panes) never lingers in the background. Spawned OUTSIDE the
-; window so it survives the close; needed because zellij on_force_close does not
-; fire on Windows.
-NodeExe  := FileExist(A_ProgramFiles "\nodejs\node.exe") ? A_ProgramFiles "\nodejs\node.exe" : "node"
-Watchdog := A_ScriptDir "\..\..\session-watchdog.mjs"
+; NO session watchdog any more (2026-07-01 incident): closing the window only
+; detaches — the claude-cc session and every agent in it keep running, and the
+; next Ctrl+Alt+C reattaches to them. Ending a session is always deliberate
+; (Ctrl+Alt+Q per tab, or `zellij delete-session claude-cc --force`).
 
 FindVerticalMonitor() {
     Loop MonitorGetCount() {
@@ -76,10 +73,6 @@ OpenCenter() {
             h  := Round(wh * 0.72)
             WinMove(l + 40, t + 40, w, h, "ahk_id " win)
         }
-    }
-    ; Start the watchdog (outside the window tree) so the session ends with it.
-    if (win && FileExist(Watchdog)) {
-        try Run('"' NodeExe '" "' Watchdog '" claude-cc', , "Hide")
     }
 }
 

@@ -1,4 +1,4 @@
-# Helix config — single shared source (chezmoi places it at the right per-OS path).
+# Helix config — single shared source (install.mjs places it at the right per-OS path).
 theme = "catppuccin_mocha"
 
 [editor]

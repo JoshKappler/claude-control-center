@@ -7,16 +7,13 @@
 ; the persistent hotkey instance (#SingleInstance Off + its own filename).
 
 GridClass := "wezterm-claude-cc"
-; Self-locating (see claude-cc.ahk): launch.cmd is alongside this script, the
-; watchdog two levels up at the repo root. No hardcoded install path.
+; Self-locating (see claude-cc.ahk): launch.cmd is alongside this script. No
+; hardcoded install path.
 LaunchCmd := A_ScriptDir "\launch.cmd"
 ; Resolve wezterm by full path so it works regardless of the inherited PATH.
 WezExe := FileExist(A_ProgramFiles "\WezTerm\wezterm.exe") ? A_ProgramFiles "\WezTerm\wezterm.exe" : "wezterm"
-; Session watchdog: ends the claude-cc Zellij session when this window closes so it
-; (and its CLI/agent panes) never lingers in the background. Spawned OUTSIDE the
-; window so it survives the close (zellij on_force_close does not fire on Windows).
-NodeExe  := FileExist(A_ProgramFiles "\nodejs\node.exe") ? A_ProgramFiles "\nodejs\node.exe" : "node"
-Watchdog := A_ScriptDir "\..\..\session-watchdog.mjs"
+; NO session watchdog any more (2026-07-01 incident): closing the window only
+; detaches — the session and its agents keep running; the next launch reattaches.
 
 FindVerticalMonitor() {
     Loop MonitorGetCount() {
@@ -68,9 +65,5 @@ if (win && WinExist("ahk_id " win)) {
         h  := Round(wh * 0.72)
         WinMove(l + 40, t + 40, w, h, "ahk_id " win)
     }
-}
-; Start the watchdog (outside the window tree) so the session ends with the window.
-if (win && FileExist(Watchdog)) {
-    try Run('"' NodeExe '" "' Watchdog '" claude-cc', , "Hide")
 }
 ExitApp

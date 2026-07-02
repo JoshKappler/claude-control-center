@@ -6,9 +6,11 @@
 //   1. Self-updates THIS repo (`git pull --ff-only`) so the control center keeps
 //      itself current with whatever you pushed from another machine — the "meta"
 //      part: the tool updates itself.
-//   2. Runs the freshly-pulled clone-all.mjs to clone-missing + ff-only pull every
+//   2. If the self-update pulled new commits, runs install.mjs so workspace/
+//      machine config (zellij, wezterm, claude settings, …) is redeployed too.
+//   3. Runs the freshly-pulled clone-all.mjs to clone-missing + ff-only pull every
 //      OTHER repo into the projects root (the folder this repo lives in).
-//   3. Appends a one-line summary to ~/.claude/state/cc/sync.log and writes the
+//   4. Appends a one-line summary to ~/.claude/state/cc/sync.log and writes the
 //      full last result to ~/.claude/state/cc/sync-last.json.
 //
 // Safe by design: the --ff-only self-pull and clone-all both refuse to discard
@@ -37,28 +39,34 @@ process.env.PATH = [...EXTRA, ...(process.env.PATH || '').split(':')].filter(Boo
 
 const ts = () => new Date().toISOString();
 
-function selfUpdate() {
-  const r = spawnSync('git', ['-C', REPO, 'pull', '--ff-only', '--quiet'], { encoding: 'utf8', timeout: 120000 });
-  if (r.error) return 'self-update: ' + (r.error.code || r.error.message);
-  if (r.status !== 0) return 'self-update: skipped (' + String(r.stderr || '').trim().replace(/\s+/g, ' ').slice(0, 80) + ')';
-  return 'self-update: ok';
+function head() {
+  const r = spawnSync('git', ['-C', REPO, 'rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 30000 });
+  return (!r.error && r.status === 0) ? String(r.stdout).trim() : '';
 }
 
-function chezmoiSync() {
-  // The terminal wiring (zellij + wezterm config) is deployed by chezmoi from a
-  // SEPARATE dotfiles repo that lives OUTSIDE the projects root — so selfUpdate()
-  // and clone-all never touch it. Without this step a config fix pushed from another
-  // machine never reaches this one (the bug that left a stale Home tab-bar here).
-  // Pull the chezmoi source repo, then re-apply ONLY the CC wiring paths so we never
-  // clobber unrelated dotfiles (chezmoi also honors .chezmoiignore). Non-fatal.
-  const home = os.homedir();
-  const targets = [path.join(home, '.config', 'zellij'), path.join(home, '.config', 'wezterm')];
-  const pull = spawnSync('chezmoi', ['git', '--', 'pull', '--ff-only', '--quiet'], { encoding: 'utf8', timeout: 120000 });
-  if (pull.error) return 'chezmoi: ' + (pull.error.code === 'ENOENT' ? 'not installed' : (pull.error.code || pull.error.message));
-  const apply = spawnSync('chezmoi', ['apply', ...targets], { encoding: 'utf8', timeout: 60000 });
-  if (apply.error) return 'chezmoi: ' + (apply.error.code || apply.error.message);
-  if (apply.status !== 0) return 'chezmoi: apply skipped (' + String(apply.stderr || '').trim().replace(/\s+/g, ' ').slice(0, 80) + ')';
-  return 'chezmoi: ok';
+// Self-update this repo. Returns { note, changed } — `changed` drives the config
+// redeploy below, so a pulled keybind/layout fix actually reaches this machine.
+function selfUpdate() {
+  const before = head();
+  const r = spawnSync('git', ['-C', REPO, 'pull', '--ff-only', '--quiet'], { encoding: 'utf8', timeout: 120000 });
+  if (r.error) return { note: 'self-update: ' + (r.error.code || r.error.message), changed: false };
+  if (r.status !== 0) return { note: 'self-update: skipped (' + String(r.stderr || '').trim().replace(/\s+/g, ' ').slice(0, 80) + ')', changed: false };
+  const after = head();
+  return { note: 'self-update: ok', changed: !!before && !!after && before !== after };
+}
+
+function deployConfig(changed) {
+  // Machine config (zellij + wezterm + claude settings + …) lives in workspace/ and
+  // is deployed by install.mjs (chezmoi is retired). Without this step a config fix
+  // pushed from another machine never reaches this one — the exact stale-config bug
+  // the old chezmoi hook existed for. Only runs when self-update pulled new commits,
+  // so a tick with nothing new touches nothing. Non-fatal. NOTE: new zellij config
+  // still only applies to NEW sessions; a running claude-cc session is never touched.
+  if (!changed) return 'config: unchanged';
+  const r = spawnSync(process.execPath, [path.join(REPO, 'install.mjs')], { encoding: 'utf8', timeout: 120000 });
+  if (r.error) return 'config: ' + (r.error.code || r.error.message);
+  if (r.status !== 0) return 'config: install.mjs failed (' + String(r.stderr || '').trim().replace(/\s+/g, ' ').slice(0, 80) + ')';
+  return 'config: deployed';
 }
 
 function runCloneAll() {
@@ -90,17 +98,17 @@ function appendLog(line) {
 
 function main() {
   fs.mkdirSync(STATE, { recursive: true });
-  const self = selfUpdate();
-  const chez = chezmoiSync();
+  const { note: self, changed } = selfUpdate();
+  const config = deployConfig(changed);
   const { parsed, raw, err, status, error } = runCloneAll();
 
   if (parsed) {
-    try { fs.writeFileSync(LAST, JSON.stringify({ at: ts(), self, chezmoi: chez, ...parsed }, null, 2)); } catch { /* */ }
-    appendLog(`${ts()}  ${self}  |  ${chez}  |  ${summarize(parsed)}`);
+    try { fs.writeFileSync(LAST, JSON.stringify({ at: ts(), self, config, ...parsed }, null, 2)); } catch { /* */ }
+    appendLog(`${ts()}  ${self}  |  ${config}  |  ${summarize(parsed)}`);
   } else {
     const why = error ? (error.code || error.message)
       : String(err || raw || 'no output').trim().replace(/\s+/g, ' ').slice(0, 160);
-    appendLog(`${ts()}  ${self}  |  ${chez}  |  clone-all FAILED (status ${status}): ${why}`);
+    appendLog(`${ts()}  ${self}  |  ${config}  |  clone-all FAILED (status ${status}): ${why}`);
   }
   process.exit(0);
 }

@@ -10,13 +10,16 @@
 // Behavior:
 //   - Discovers repos: <root> itself if it contains `.git`, PLUS each immediate
 //     child directory containing a `.git` entry (one level deep only).
-//   - For each repo: skip if detached HEAD ("detached HEAD"), skip if clean and
-//     nothing ahead of upstream (error:null), skip if no upstream ("no upstream").
-//     Otherwise `git push` -> pushed:true. On push failure, capture the message.
-//   - EXCLUDES any repo whose folder basename is `dotfiles`, and the chezmoi
-//     source repo (toplevel == C:\Users\joshu\.local\share\chezmoi, realpath-aware,
-//     case-insensitive, separator-normalized).
-//   - Prints valid JSON: { "repos": [ {"path","branch","pushed","error"}, ... ] }
+//   - For each repo: skip if detached HEAD ("detached HEAD"); flag "no upstream"
+//     (work that can never reach GitHub deserves attention, not silence); push
+//     ONLY when commits are actually ahead of upstream -> pushed:true (a repo
+//     with nothing ahead gets no pointless network round-trip and is never
+//     reported as "uploaded"). On push failure, capture the message.
+//   - `dirty:true` marks repos with UNCOMMITTED changes — those changes are NOT
+//     uploaded by a push, and the dashboard says so, so "PUSH done" can never
+//     silently mean "your latest work is still only on this machine".
+//   - EXCLUDES any repo whose folder basename is `dotfiles`.
+//   - Prints valid JSON: { "repos": [ {"path","branch","pushed","dirty","error"}, ... ] }
 //   - Exit 0 ALWAYS, even when individual repos error.
 //
 // Manual test recipe (safe — no real pushes):
@@ -32,9 +35,11 @@
 //   git init detached && (cd detached && git commit --allow-empty -m a \
 //     && git checkout --detach HEAD)
 //   node /path/to/git-push-all.mjs /tmp/ccgit --dry
-//   # Expect JSON: clean -> pushed:false error:null; dirty -> pushed:true (dry);
+//   # Expect JSON: clean -> pushed:false error:null; dirty (nothing ahead) ->
+//   #   pushed:false dirty:true (uncommitted work is not pushable);
 //   #   noupstream -> pushed:false error:"no upstream";
 //   #   detached -> pushed:false error:"detached HEAD".
+//   # Commit something in `dirty` and it becomes ahead -> pushed:true (dry).
 //
 //   # 2. To prove a real push would run, drop --dry — but ONLY against a
 //   #    throwaway bare remote like above. Never against live dirty repos.
@@ -42,8 +47,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-
-const CHEZMOI_DIR = 'C:\\Users\\joshu\\.local\\share\\chezmoi';
 
 // Normalize a path for case-insensitive, separator-agnostic comparison.
 // Resolves symlinks/realpath when the path exists.
@@ -56,13 +59,6 @@ function canon(p) {
     resolved = path.resolve(p);
   }
   return resolved.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase();
-}
-
-// Pre-compute the canonical chezmoi dir (try both the literal path and realpath).
-const CHEZMOI_CANON = new Set([canon(CHEZMOI_DIR)]);
-{
-  // Also add the plain-resolved form in case realpath differs from resolve.
-  CHEZMOI_CANON.add(CHEZMOI_DIR.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase());
 }
 
 function git(repoPath, args) {
@@ -119,22 +115,14 @@ function discoverRepos(root) {
   return repos;
 }
 
-// Decide whether a repo should be excluded (dotfiles or the chezmoi source).
+// Decide whether a repo should be excluded (the dotfiles repo).
 function isExcluded(repoPath) {
-  if (path.basename(repoPath).toLowerCase() === 'dotfiles') return true;
-  let top = '';
-  try {
-    top = git(repoPath, ['rev-parse', '--show-toplevel']).trim();
-  } catch {
-    top = repoPath;
-  }
-  if (CHEZMOI_CANON.has(canon(top))) return true;
-  return false;
+  return path.basename(repoPath).toLowerCase() === 'dotfiles';
 }
 
 // Process one repo, return its result record (never throws).
 function processRepo(repoPath, dry) {
-  const rec = { path: repoPath, branch: null, pushed: false, error: null };
+  const rec = { path: repoPath, branch: null, pushed: false, dirty: false, error: null };
 
   // Branch / detached-HEAD detection.
   let branch;
@@ -150,57 +138,47 @@ function processRepo(repoPath, dry) {
     return rec;
   }
 
-  // Upstream presence.
+  // Working-tree dirty? (Uncommitted work — a push would NOT upload it, so it is
+  // reported rather than silently ignored.)
+  try {
+    rec.dirty = git(repoPath, ['status', '--porcelain']).trim() !== '';
+  } catch (e) {
+    rec.error = errMsg(e);
+    return rec;
+  }
+
+  // Upstream presence. A repo without one can never reach GitHub — flag it so the
+  // work in it is not invisibly local-only forever.
   let hasUpstream = true;
   try {
     git(repoPath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
   } catch {
     hasUpstream = false;
   }
-
-  // Working-tree dirty?
-  let dirty = false;
-  try {
-    dirty = git(repoPath, ['status', '--porcelain']).trim() !== '';
-  } catch (e) {
-    rec.error = errMsg(e);
-    return rec;
-  }
-
-  // Commits ahead of upstream (only meaningful when an upstream exists).
-  let ahead = 0;
-  if (hasUpstream) {
-    try {
-      ahead = parseInt(git(repoPath, ['rev-list', '--count', '@{u}..HEAD']).trim(), 10);
-      if (!Number.isFinite(ahead)) ahead = 0;
-    } catch {
-      ahead = 0;
-    }
-  }
-
-  // Clean AND nothing ahead -> nothing to push.
-  if (!dirty && ahead === 0) {
-    rec.pushed = false;
-    rec.error = null;
-    return rec;
-  }
-
-  // Dirty/ahead but no upstream -> can't push.
   if (!hasUpstream) {
     rec.error = 'no upstream';
     return rec;
   }
 
+  // Commits ahead of upstream. Only an ahead repo has anything a push can upload;
+  // pushing anything else is a pointless network round-trip reported as "uploaded".
+  let ahead = 0;
+  try {
+    ahead = parseInt(git(repoPath, ['rev-list', '--count', '@{u}..HEAD']).trim(), 10);
+    if (!Number.isFinite(ahead)) ahead = 0;
+  } catch {
+    ahead = 0;
+  }
+  if (ahead === 0) return rec;
+
   // Push (or pretend to, under --dry).
   if (dry) {
     rec.pushed = true;
-    rec.error = null;
     return rec;
   }
   try {
     git(repoPath, ['push']);
     rec.pushed = true;
-    rec.error = null;
   } catch (e) {
     rec.pushed = false;
     rec.error = errMsg(e);

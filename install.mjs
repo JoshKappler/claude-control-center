@@ -32,7 +32,8 @@ function render(text) {
   return text
     .split('{{APP}}').join(APP_FWD)
     .split('{{FONT_SIZE}}').join(MAC ? '14.0' : '11.0')
-    .split('{{WIN_DEFAULT_PROG}}').join(WIN ? pwshProg() : '');
+    .split('{{WIN_DEFAULT_PROG}}').join(WIN ? pwshProg() : '')
+    .split('{{COPY_COMMAND}}').join(MAC ? 'copy_command "pbcopy"' : '// (no copy_command on Windows: WezTerm handles OSC52 copy natively)');
 }
 
 // ---- fs helpers ------------------------------------------------------------
@@ -113,4 +114,7 @@ if (WIN) {
 }
 
 console.log(`\nDone. ${wrote} file(s) deployed, ${backedUp} backed up (*.pre-install.bak).`);
-console.log('Reopen the Control Center (Ctrl+Alt+C) to pick up the new config.');
+console.log('Zellij config (keybinds/layout) applies to NEW sessions only. A running');
+console.log('claude-cc session keeps its old config until you deliberately end it:');
+console.log('close its tabs (Ctrl+Alt+Q), or `zellij delete-session claude-cc --force`,');
+console.log('then reopen with Ctrl+Alt+C. Never kill it while agents are mid-task.');

@@ -1,4 +1,4 @@
-# espanso prompt library — single shared source (chezmoi places it at the right per-OS path).
+# espanso prompt library — single shared source (install.mjs places it at the right per-OS path).
 # Reusable prompts for working in the Claude Code CLI. Type a trigger anywhere; the full
 # prompt is pasted via the clipboard (force_clipboard) so multi-line text lands intact.
 # The same prompts also exist as Claude Code slash-commands (~/.claude/commands).
@@ -7,7 +7,7 @@ matches:
   # :plan — scope the work before touching code.
   - trigger: ":plan"
     force_clipboard: true
-    replace: |
+    replace: |-
       Before writing any code, plan this task:
       1. Restate the goal in one sentence so we agree on scope.
       2. List the files you expect to read or change.
@@ -18,7 +18,7 @@ matches:
   # :review — terse, high-signal code review.
   - trigger: ":review"
     force_clipboard: true
-    replace: |
+    replace: |-
       Review the current changes. Be terse and specific.
       - Flag correctness bugs, edge cases, and broken assumptions FIRST.
       - Then note simplifications, dead code, and clearer naming.
@@ -28,7 +28,7 @@ matches:
   # :commit — conventional-commit message from the staged diff.
   - trigger: ":commit"
     force_clipboard: true
-    replace: |
+    replace: |-
       Write a Conventional Commits message for the staged changes.
       - Subject: type(scope): summary, imperative mood, <=72 chars.
       - Types: feat|fix|refactor|perf|test|docs|chore|build|ci.
@@ -38,7 +38,7 @@ matches:
   # :debug — root-cause-first, no guessing.
   - trigger: ":debug"
     force_clipboard: true
-    replace: |
+    replace: |-
       Debug this systematically — find the root cause, don't guess at fixes.
       1. State the exact symptom and how to reproduce it.
       2. Form 2-3 hypotheses; rank them by likelihood.
@@ -49,7 +49,7 @@ matches:
   # :explain — explain unfamiliar code clearly.
   - trigger: ":explain"
     force_clipboard: true
-    replace: |
+    replace: |-
       Explain this code clearly and concisely.
       - One-sentence summary of what it does and why it exists.
       - Walk the control/data flow; note any non-obvious behavior.
@@ -59,7 +59,7 @@ matches:
   # :test — TDD, failing test first.
   - trigger: ":test"
     force_clipboard: true
-    replace: |
+    replace: |-
       Write a failing test FIRST for this behavior, before any implementation.
       - Cover the happy path plus the key edge cases.
       - Match the project's existing test framework and conventions.
@@ -69,7 +69,7 @@ matches:
   # :refactor — behavior-preserving cleanup.
   - trigger: ":refactor"
     force_clipboard: true
-    replace: |
+    replace: |-
       Refactor this code WITHOUT changing its behavior.
       - Improve names, structure, and readability; cut duplication.
       - Keep changes small and reviewable; no new features or scope creep.
@@ -79,7 +79,7 @@ matches:
   # :tidy — quick local cleanup of the current file/diff.
   - trigger: ":tidy"
     force_clipboard: true
-    replace: |
+    replace: |-
       Tidy up the current file/diff only — low-risk cleanups:
       remove dead code and stray debug logs, fix obvious typos, tighten
       naming, and apply the project's formatting/lint conventions.
@@ -88,7 +88,7 @@ matches:
   # :pr — pull-request title and body.
   - trigger: ":pr"
     force_clipboard: true
-    replace: |
+    replace: |-
       Draft a pull request for the current branch's changes.
       - Title: concise, imperative (matches our commit style).
       - Body: ## Summary (what & why), ## Changes (bullets),
@@ -98,7 +98,7 @@ matches:
   # :spec — turn a rough idea into a tight spec.
   - trigger: ":spec"
     force_clipboard: true
-    replace: |
+    replace: |-
       Turn this idea into a short, concrete spec before we build:
       - Problem & goal (1-2 sentences).
       - Scope: what's in, what's explicitly out (non-goals).
