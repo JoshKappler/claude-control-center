@@ -68,8 +68,12 @@ keybinds {
         // pane, which is why the overlay kept getting stuck open. This is THE discovery
         // key — the thin bar under the tab strip advertises it on every tab.
         bind "Alt s" { Run "node" "{{APP}}/cheatsheet.mjs" { floating true; name "shortcuts"; close_on_exit true; x "5%"; y "5%"; width "90%"; height "90%"; }; }
-        // Alt+a: add another Claude agent in this tab (new pane running `claude`).
-        bind "Alt a" { Run "claude" "--dangerously-skip-permissions"; }
+        // Alt+a: add another Claude agent in this tab. Runs agent-pane.mjs (not bare
+        // `claude`) so the pane resumes ITS OWN conversation on any re-run — claude
+        // exiting (crash, /exit, auto-update) or a resurrected session no longer
+        // silently starts a fresh chat. `--key auto` derives a stable key from the
+        // zellij session + pane id (a static keybind can't mint a per-launch nonce).
+        bind "Alt a" { Run "node" "{{APP}}/agent-pane.mjs" "--key" "auto" "--" "--dangerously-skip-permissions"; }
         // Alt+h: jump straight back to the Home dashboard (always the first tab).
         bind "Alt h" { GoToTab 1; }
         // Alt+Shift+Arrows: resize the focused agent (grow toward that edge). Pairs
@@ -97,6 +101,15 @@ keybinds {
         // Ctrl+Alt+q: deliberately close this WHOLE tab (all of its agents at
         // once). Ctrl+Alt+w above closes only the single focused agent.
         bind "Ctrl Alt q" { CloseTab; }
+        // Keyboard scrollback for the chat, matching the mouse wheel (which stays
+        // the primary way to scroll). While scrolled, zellij shows the position as
+        // "SCROLL: <line>/<total>" on the pane's top border — that indicator is the
+        // closest thing to a scrollbar zellij can render (it has no graphical bar,
+        // and its plugin API exposes no scroll offset to draw one from). Alt-based
+        // so nothing is stolen from Claude; Alt+End snaps back to the live tail.
+        bind "Alt PageUp"   { PageScrollUp; }
+        bind "Alt PageDown" { PageScrollDown; }
+        bind "Alt End"      { ScrollToBottom; }
         // No-kill guard: disable global Quit so one keystroke can't nuke every agent.
         unbind "Ctrl q"
         // Stop Zellij from eating ordinary terminal/Claude keys and popping up mode

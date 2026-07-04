@@ -86,6 +86,7 @@
     "commit-commands@claude-plugins-official": true,
     "vercel@claude-plugins-official": true
   },
+  "model": "fable",
   "effortLevel": "xhigh",
   "autoUpdatesChannel": "latest",
   "voice": {

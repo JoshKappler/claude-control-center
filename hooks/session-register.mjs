@@ -4,9 +4,15 @@
 // Registered in ~/.claude/settings.json for the SessionStart and SessionEnd hook
 // events. Reads the hook payload JSON on stdin and maintains the cc state root:
 //   - SessionStart: writes panes/<ZELLIJ_PANE_ID> = <session_id> so a pane can
-//     later resolve "which agent am I" for the inspector.
+//     later resolve "which agent am I" for the inspector. When CC_PANE_KEY is set
+//     (the pane was launched by agent-pane.mjs) it also writes
+//     agent-keys/<CC_PANE_KEY> = <session_id> — the pane->conversation binding
+//     agent-pane.mjs resumes from on its next run. Fires on /clear and resume
+//     too, so the binding always tracks the pane's CURRENT conversation.
 //   - SessionEnd: prunes this session's agents/<session_id>.json, any panes/*
 //     file whose contents === session_id, and the subagents/<session_id>/ dir.
+//     agent-keys/* is deliberately NOT pruned: surviving the claude process's
+//     exit is the whole point of the binding.
 //
 // Contract: zero npm deps, Node built-ins only. ALWAYS exits 0, never throws —
 // a hook must never block or crash the Claude session.
@@ -56,6 +62,9 @@ function panesDir() {
 function subagentsDir(parent) {
   return path.join(stateRoot(), 'subagents', String(parent));
 }
+function agentKeysDir() {
+  return path.join(stateRoot(), 'agent-keys');
+}
 
 function ensureDir(dir) {
   try {
@@ -100,13 +109,28 @@ function safeRmDir(p) {
 }
 
 function onSessionStart(sessionId) {
+  if (!sessionId) return;
   const paneId = process.env.ZELLIJ_PANE_ID;
-  if (!paneId || !sessionId) return; // no pane id -> nothing to register
-  ensureDir(panesDir());
-  try {
-    fs.writeFileSync(path.join(panesDir(), String(paneId)), String(sessionId), 'utf8');
-  } catch {
-    /* ignore */
+  if (paneId) {
+    ensureDir(panesDir());
+    try {
+      fs.writeFileSync(path.join(panesDir(), String(paneId)), String(sessionId), 'utf8');
+    } catch {
+      /* ignore */
+    }
+  }
+  // Pane->conversation binding for agent-pane.mjs (see header). Same sanitize
+  // rule as agent-pane.mjs so the two sides always agree on the filename.
+  const key = process.env.CC_PANE_KEY;
+  if (key) {
+    ensureDir(agentKeysDir());
+    try {
+      fs.writeFileSync(
+        path.join(agentKeysDir(), String(key).replace(/[^A-Za-z0-9._-]/g, '-')),
+        String(sessionId), 'utf8');
+    } catch {
+      /* ignore */
+    }
   }
 }
 

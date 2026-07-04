@@ -32,6 +32,12 @@ export const IN_TAB = [
     desc: 'pass all keys to Claude' },
   { keys: 'Alt+S',            label: 'show / hide this list',      section: 'DISCOVER & ESCAPE',
     desc: 'show / hide this list (Alt+S again closes)' },
+  { keys: 'Mouse Wheel',      label: 'scroll the chat',            section: 'SCROLL THE CHAT',
+    desc: 'scroll the chat history (the pane border shows SCROLL: line/total while scrolled)' },
+  { keys: 'Alt+PgUp/PgDn',    label: 'page through the chat',      section: 'SCROLL THE CHAT',
+    desc: 'page up / down through the chat history from the keyboard' },
+  { keys: 'Alt+End',          label: 'snap back to live',          section: 'SCROLL THE CHAT',
+    desc: 'jump back to the live end of the chat (the newest output)' },
 ];
 
 // Dashboard (home.mjs) keys — parser-bound inside home.mjs itself. Short `label` for

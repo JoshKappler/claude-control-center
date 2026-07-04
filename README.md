@@ -56,6 +56,7 @@ always know which agent has focus. The green **shortcut bar** pinned at the
 | `Ctrl+Alt+q` | Close the whole tab (all its agents at once) |
 | `Ctrl+g` | Lock keys straight to Claude (so Zellij won't intercept shortcuts) |
 | `Alt+i` | Open the subagent monitor (a live status table — what each subagent is doing; not its transcript) |
+| Mouse wheel / `Alt+PgUp` / `Alt+PgDn` | Scroll the chat history. While scrolled, the pane's top border shows **`SCROLL: <line>/<total>`** — your position indicator (Zellij has no graphical scrollbar to draw). `Alt+End` snaps back to the live end. |
 
 > The advertised text for all of these shortcuts is generated from a single
 > module, [`shortcuts.mjs`](shortcuts.mjs) — the bottom strip and the dashboard
@@ -84,6 +85,17 @@ mid-refactor session was unrecoverably lost):
   offering to kill it — it never just does it.
 - `session-durability.test.mjs` pins all of this; a change that reintroduces an
   automatic kill fails the suite.
+
+**Conversations are durable too.** Each agent pane runs through `agent-pane.mjs`,
+which pins the pane to its Claude conversation: the SessionStart hook records
+`agent-keys/<pane-key> = <session id>`, and any re-run of the pane — Claude
+exiting (a crash, `/exit`, an auto-update restart) and you pressing Enter, or a
+whole session resurrected after a reboot — relaunches `claude --resume <that id>`
+instead of a blank new chat. A pane has no shell behind it, so without this there
+was nowhere to type `claude --resume` the way you would in a normal terminal;
+conversations came back only via a manual `/resume` search. (`/resume` inside a
+running agent works normally too — the picker lists this project's sessions
+whether they were launched here or in a plain terminal.)
 
 One consequence: **zellij config changes (keybinds/layouts) only apply to NEW
 sessions.** After `node install.mjs`, finish or park your agents, end the session
@@ -150,6 +162,7 @@ full last result is in `~/.claude/state/cc/sync-last.json`.
 | `install.mjs` | **Deploys `workspace/` config to the OS paths** each tool reads from (cross-platform, with `.pre-install.bak` backups). Replaces chezmoi. Run `node install.mjs` after `git pull` on any machine. |
 | `workspace/` | **All machine config in one place** (zellij, WezTerm, Claude global settings/CLAUDE.md/commands, helix, espanso, hammerspoon, Windows launcher). See [`workspace/README.md`](workspace/README.md). |
 | `home.mjs` | **Home TUI** — folder navigator, agent-count picker, launch, GitHub push/pull, live 5h/Weekly limit gauges, subagents list + monitor, help overlay. |
+| `agent-pane.mjs` | **Conversation continuity wrapper** — every agent pane runs `node agent-pane.mjs --key <k> -- <claude flags>`. Resumes the pane's own conversation (`claude --resume <bound session>`) on re-run/resurrection; falls back to a fresh launch when there is nothing to resume. Binding written by `hooks/session-register.mjs` via `CC_PANE_KEY`. |
 | `shortcuts.mjs` | **Single source of truth** for advertised shortcut text. `cheatsheet.mjs` and `home.mjs` both render from it. |
 | `statusline.mjs` | statusLine for `~/.claude/settings.json`. Prints `model · ctx% · task` and writes `agents/<sessionId>.json`. |
 | `inspector.mjs` | Live subagent **monitor** — a 1s-refresh status table (type/label/last tool/elapsed) per subagent, opened in a Zellij floating pane. Shows metadata, not transcripts. |
@@ -191,6 +204,9 @@ State root: `~/.claude/state/cc/` (each component creates it).
 - `agents/<sessionId>.json` — per-agent status incl. `rateLimits` and `paneId`
   (readers ignore entries older than 120 s).
 - `panes/<ZELLIJ_PANE_ID>` — plain text = the `sessionId` running in that pane.
+- `agent-keys/<pane-key>` — plain text = the last `sessionId` the pane with that
+  key ran (written on SessionStart, deliberately kept after SessionEnd);
+  `agent-pane.mjs` resumes it on the pane's next run.
 - `subagents/<parentSessionId>/<agentId>.json` — per-subagent status.
 - `gen/claude-N.kdl` — the agent-tab layout `home.mjs` generates for the current
   window at launch (orientation-aware grid), then hands to `zellij action new-tab`.

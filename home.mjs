@@ -86,11 +86,16 @@ function rowCounts(n, r) {
 
 // The agent-grid KDL (the part of the tab above the shortcut strip). Each row is a
 // left-to-right vertical split; rows are stacked with an outer horizontal split.
-function gridKdl(n, rows, model, effort) {
+// Panes run agent-pane.mjs (not bare `claude`): the wrapper resumes the pane's own
+// conversation on any re-run — claude exit + Enter, or a session resurrected after
+// a reboot — instead of silently starting a fresh one. `nonce` makes each launch's
+// keys unique (two tabs on the same folder must not steal each other's sessions)
+// and is baked into the layout, so it survives zellij's session serialization.
+function gridKdl(n, rows, model, effort, app, nonce) {
   let k = 1;
   const rowToKdl = (cnt) => {
     const panes = [];
-    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="claude" name="Claude ${k}" { args "--dangerously-skip-permissions" "--model" "${model}" "--effort" "${effort}"; }`);
+    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="node" name="Claude ${k}" { args "${app}/agent-pane.mjs" "--key" "${nonce}-${k}" "--" "--dangerously-skip-permissions" "--model" "${model}" "--effort" "${effort}"; }`);
     if (cnt === 1) return '                ' + panes[0];
     return '                pane split_direction="vertical" {\n'
       + panes.map((p) => '                    ' + p).join('\n')
@@ -101,7 +106,7 @@ function gridKdl(n, rows, model, effort) {
   return '                pane split_direction="horizontal" {\n' + body + '\n                }';
 }
 
-function genLayout(n, app, model = 'opus', effort = 'xhigh') {
+function genLayout(n, app, model = 'opus', effort = 'xhigh', nonce = Date.now().toString(36)) {
   const { rows } = chooseGrid(n, termCols(), termRows());
   return `// ${n} Claude agent${n === 1 ? '' : 's'} (${model}/${effort}) — generated for this window (balanced ${rows}-row grid). Alt+S reveals shortcuts.
 layout {
@@ -111,7 +116,7 @@ layout {
     }
     tab {
         pane split_direction="horizontal" {
-${gridKdl(n, rows, model, effort)}
+${gridKdl(n, rows, model, effort, app, nonce)}
                 pane size=1 borderless=true command="node" { args "${app}/hintbar.mjs"; }
         }
     }

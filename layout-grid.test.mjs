@@ -47,11 +47,21 @@ for (let n = 1; n <= 8; n++) {
 }
 
 // --- genLayout output is structurally sound: one pane per agent + the top hint row
-//     (hintbar), no bottom strip, and every node is properly terminated. ---
+//     (hintbar), no bottom strip, and every node is properly terminated. Agents run
+//     through agent-pane.mjs (conversation continuity), each with a UNIQUE key that
+//     carries the launch nonce — that is what lets a re-run/resurrected pane resume
+//     its own conversation instead of starting a fresh one. ---
 for (let n = 1; n <= 8; n++) {
-  const kdl = genLayout(n, '/x'); // window read from process.stdout (defaults are fine here)
-  const agents = (kdl.match(/command="claude"/g) || []).length;
-  check(`genLayout(${n}) emits ${n} claude panes`, agents === n);
+  const kdl = genLayout(n, '/x', 'opus', 'xhigh', 'nonceA'); // window read from process.stdout (defaults are fine here)
+  const agents = (kdl.match(/agent-pane\.mjs/g) || []).length;
+  check(`genLayout(${n}) emits ${n} agent panes (via agent-pane.mjs)`, agents === n);
+  check(`genLayout(${n}) has no bare claude panes (continuity would be lost)`,
+    !kdl.includes('command="claude"'));
+  const keys = [...kdl.matchAll(/"--key" "([^"]+)"/g)].map((m) => m[1]);
+  check(`genLayout(${n}) gives every pane a unique nonce-prefixed key`,
+    keys.length === n && new Set(keys).size === n && keys.every((k) => k.startsWith('nonceA-')));
+  check(`genLayout(${n}) still passes the claude flags through`,
+    kdl.includes('"--dangerously-skip-permissions"') && kdl.includes('"--model" "opus"') && kdl.includes('"--effort" "xhigh"'));
   check(`genLayout(${n}) includes the tab strip + a subtle hintbar`,
     kdl.includes('zellij:tab-bar') && kdl.includes('/x/hintbar.mjs'));
   check(`genLayout(${n}) has no old agentbar/separator panes`,
@@ -59,6 +69,17 @@ for (let n = 1; n <= 8; n++) {
   // every `args "..."` child node must end in a terminator before its closing brace
   check(`genLayout(${n}) terminates inline args nodes (the parse bug)`,
     !/\.mjs"\s+\}/.test(kdl));
+}
+// Two launches must never share keys — a same-folder second tab stealing the first
+// tab's conversations is exactly the bug the nonce exists to prevent.
+{
+  const a = genLayout(2, '/x', 'opus', 'xhigh', 'nonceA');
+  const b = genLayout(2, '/x', 'opus', 'xhigh', 'nonceB');
+  const keysOf = (kdl) => [...kdl.matchAll(/"--key" "([^"]+)"/g)].map((m) => m[1]);
+  check('different launch nonces yield disjoint pane keys',
+    keysOf(a).every((k) => !keysOf(b).includes(k)));
+  check('omitting the nonce still mints one (keys never empty)',
+    keysOf(genLayout(1, '/x')).every((k) => /.+-1$/.test(k)));
 }
 
 if (failures) { console.log('\n' + failures + ' FAILURE(S)'); process.exit(1); }
