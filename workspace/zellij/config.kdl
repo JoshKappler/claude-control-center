@@ -28,20 +28,145 @@ on_force_close "detach"
 // resurrectable snapshot instead of four lost hours.
 session_serialization true
 
-// Green-on-black phosphor theme to match WezTerm's Homebrew scheme.
+// Green-on-black phosphor theme to match WezTerm's Homebrew scheme — in zellij's
+// component format (0.42+), NOT the old fg/bg palette. The old format painted
+// inactive tab ribbons with `fg` and the active one with `green`, and this theme
+// needs both to be phosphor green — so every tab looked identical and you could
+// not tell which tab you were in. With components the ACTIVE tab is the single
+// solid bright-green block (black text) while inactive tabs are dim green text on
+// plain black. Frames get the same split: the focused agent's border is bright,
+// unfocused ones dim.
 themes {
     homebrew {
-        fg "#33FF33"
-        bg "#000000"
-        black "#000000"
-        red "#00CC00"
-        green "#33FF33"
-        yellow "#AAFF00"
-        blue "#00CC66"
-        magenta "#33FFAA"
-        cyan "#00FFCC"
-        white "#CCFFCC"
-        orange "#88FF00"
+        text_unselected {
+            base 51 255 51
+            background 0 0 0
+            emphasis_0 136 255 0
+            emphasis_1 0 255 204
+            emphasis_2 51 255 51
+            emphasis_3 51 255 170
+        }
+        text_selected {
+            base 0 0 0
+            background 51 255 51
+            emphasis_0 136 255 0
+            emphasis_1 0 204 102
+            emphasis_2 0 100 0
+            emphasis_3 0 153 0
+        }
+        // INACTIVE tabs: dim green text, no block — they melt into the bar.
+        ribbon_unselected {
+            base 30 150 30
+            background 0 0 0
+            emphasis_0 0 204 0
+            emphasis_1 204 255 204
+            emphasis_2 0 204 102
+            emphasis_3 51 255 170
+        }
+        // ACTIVE tab: the one solid bright-green block on the bar.
+        ribbon_selected {
+            base 0 0 0
+            background 51 255 51
+            emphasis_0 0 204 0
+            emphasis_1 0 100 0
+            emphasis_2 0 153 0
+            emphasis_3 0 204 102
+        }
+        table_title {
+            base 170 255 0
+            background 0 0 0
+            emphasis_0 136 255 0
+            emphasis_1 0 255 204
+            emphasis_2 51 255 51
+            emphasis_3 51 255 170
+        }
+        table_cell_unselected {
+            base 51 255 51
+            background 0 0 0
+            emphasis_0 136 255 0
+            emphasis_1 0 255 204
+            emphasis_2 0 204 102
+            emphasis_3 51 255 170
+        }
+        table_cell_selected {
+            base 0 0 0
+            background 51 255 51
+            emphasis_0 136 255 0
+            emphasis_1 0 100 0
+            emphasis_2 0 153 0
+            emphasis_3 0 204 102
+        }
+        list_unselected {
+            base 51 255 51
+            background 0 0 0
+            emphasis_0 136 255 0
+            emphasis_1 0 255 204
+            emphasis_2 0 204 102
+            emphasis_3 51 255 170
+        }
+        list_selected {
+            base 0 0 0
+            background 51 255 51
+            emphasis_0 136 255 0
+            emphasis_1 0 100 0
+            emphasis_2 0 153 0
+            emphasis_3 0 204 102
+        }
+        // Unfocused agent borders: dim. The focused agent's border: bright.
+        frame_unselected {
+            base 30 150 30
+            background 0 0 0
+            emphasis_0 136 255 0
+            emphasis_1 0 255 204
+            emphasis_2 0 204 102
+            emphasis_3 51 255 170
+        }
+        frame_selected {
+            base 51 255 51
+            background 0 0 0
+            emphasis_0 170 255 0
+            emphasis_1 0 255 204
+            emphasis_2 51 255 170
+            emphasis_3 0 204 102
+        }
+        frame_highlight {
+            base 170 255 0
+            background 0 0 0
+            emphasis_0 136 255 0
+            emphasis_1 170 255 0
+            emphasis_2 170 255 0
+            emphasis_3 170 255 0
+        }
+        exit_code_success {
+            base 51 255 51
+            background 0 0 0
+            emphasis_0 0 255 204
+            emphasis_1 0 204 102
+            emphasis_2 51 255 170
+            emphasis_3 204 255 204
+        }
+        // The EXITED banner ("press Enter to re-run" = resume the conversation)
+        // renders in this — phosphor yellow so a dead agent is spottable.
+        exit_code_error {
+            base 170 255 0
+            background 0 0 0
+            emphasis_0 136 255 0
+            emphasis_1 0 204 0
+            emphasis_2 0 204 102
+            emphasis_3 51 255 170
+        }
+        multiplayer_user_colors {
+            player_1 0 255 204
+            player_2 170 255 0
+            player_3 51 255 170
+            player_4 204 255 204
+            player_5 0 204 102
+            player_6 136 255 0
+            player_7 0 204 0
+            player_8 51 255 51
+            player_9 30 150 30
+            player_10 0 153 0
+        }
     }
 }
 
