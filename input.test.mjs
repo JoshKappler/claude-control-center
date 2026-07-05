@@ -11,7 +11,7 @@
 //
 // Run: node input.test.mjs   (zero deps; exits non-zero on failure)
 
-import { decodeInput, feed, __setDispatch, __acceptInputNow, __resetInput } from './home.mjs';
+import { decodeInput, isReportNoise, feed, __setDispatch, __acceptInputNow, __resetInput, __getState } from './home.mjs';
 
 let failures = 0;
 function check(name, cond) {
@@ -60,6 +60,63 @@ check('startup burst dispatches nothing (no push/pull)', dispatched.length === 0
 __acceptInputNow();
 feed(Buffer.from('g', 'latin1'));
 check("a real 'g' after settle IS dispatched", dispatched.some((e) => e.kind === 'char' && e.ch === 'g'));
+
+// ---- MID-SESSION noise rejection (the startup drain never re-armed) ----
+// A header-less report fragment that arrives in the MIDDLE of a session used to sail
+// straight through as printable keys: a bare digit reset the agent count, a bare
+// `g`/`c` fired a blocking git op that froze the single-threaded UI. These pin the
+// always-on guard shut.
+
+// The classifier is a pure function — unit-test it directly (a lone key never matches).
+check('classifier: rgb: tag is noise', isReportNoise('rgb:8888/ffff/0000') === true);
+check('classifier: rgba: tag is noise', isReportNoise('rgba:12/34/56/78') === true);
+check('classifier: hex groups + separators are noise', isReportNoise('8888/ffff') === true);
+check('classifier: a bare multi-digit hex run is noise', isReportNoise('d7d7') === true);
+check('classifier: lone digit is NOT noise', isReportNoise('5') === false);
+check('classifier: lone command key is NOT noise', isReportNoise('g') === false);
+check('classifier: lone symbol key is NOT noise', isReportNoise('+') === false);
+
+// Behavioural, through feed(), with input already accepting (acceptInput = true).
+const seen = [];
+__setDispatch((ev) => seen.push(ev));
+
+function midSession(bytes) { __resetInput(); __acceptInputNow(); seen.length = 0; feed(Buffer.from(bytes, 'latin1')); }
+
+midSession('rgb:8888/ffff/0000');
+check('mid-session rgb: fragment dispatches no printable', !seen.some((e) => e.kind === 'char'));
+
+midSession('8888/ffff');
+check('mid-session 8888/ffff burst dispatches no printable', !seen.some((e) => e.kind === 'char'));
+
+midSession('5555');
+check('mid-session bare hex run dispatches no printable', !seen.some((e) => e.kind === 'char'));
+
+midSession('g');
+check("a single 'g' chunk IS recognised as the push command (char g dispatched)",
+  seen.filter((e) => e.kind === 'char' && e.ch === 'g').length === 1);
+
+midSession('5');
+check("a single '5' chunk dispatches exactly that one printable",
+  seen.filter((e) => e.kind === 'char').length === 1 && seen[0].ch === '5');
+
+// Escape-sequence events (arrows) must still pass mid-session even alongside the guard.
+midSession('\x1b[A');
+check('mid-session arrow key still dispatches', seen.some((e) => e.kind === 'arrow' && e.dir === 'up'));
+
+// Real dispatch: a lone digit sets the count; a noise burst leaves it untouched. Wrap
+// in quiet() because the real applyEvent path calls redraw(), which writes ANSI out.
+function quiet(fn) { const w = process.stdout.write; process.stdout.write = () => true; try { fn(); } finally { process.stdout.write = w; } }
+__setDispatch(null);                                       // back to the real applyEvent
+const st = __getState();
+
+__resetInput(); __acceptInputNow(); quiet(() => feed(Buffer.from('5', 'latin1')));
+check("a single typed '5' sets state.count to 5", st.count === 5);
+
+__resetInput(); __acceptInputNow(); quiet(() => feed(Buffer.from('8888/ffff', 'latin1')));
+check('a mid-session hex burst leaves state.count unchanged', st.count === 5);
+
+__resetInput(); __acceptInputNow(); quiet(() => feed(Buffer.from('rgb:2222/3333/4444', 'latin1')));
+check('a mid-session rgb: fragment leaves state.count unchanged', st.count === 5);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

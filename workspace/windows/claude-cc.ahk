@@ -1,5 +1,6 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
+#MaxThreadsPerHotkey 1                  ; a second Ctrl+Alt+C can't re-enter mid-launch
 ; claude-cc.ahk — open / focus the Claude Control Center.
 ;   Ctrl+Alt+C  -> focus the control-center window if it's open, else launch it.
 ; ONE movable, non-maximized WezTerm window hosts the persistent "claude-cc"
@@ -30,6 +31,30 @@ FindVerticalMonitor() {
     return MonitorGetPrimary()
 }
 
+; Cross-process launch lock. The hotkey (this script) and the desktop-icon path
+; (open-control-center.ahk) both check WinExist() then spawn a WezTerm client; two
+; triggers ~15ms apart can both pass the check and start two `zellij attach -c
+; claude-cc` clients, whose double FirstClientConnected corrupts the zellij server
+; (poisoned mutex). A shared named mutex serialises the check-then-spawn section
+; across both scripts. Returns the handle on success, 0 if the lock is busy.
+AcquireLaunchLock(timeout := 6000) {
+    h := DllCall("CreateMutexW", "Ptr", 0, "Int", 0, "Str", "Local\FleetViewCCLaunch", "Ptr")
+    if !h
+        return 0
+    ; 0 = WAIT_OBJECT_0 (got it); 0x80 = WAIT_ABANDONED (prior owner died — still ours).
+    r := DllCall("WaitForSingleObject", "Ptr", h, "UInt", timeout, "UInt")
+    if (r = 0 || r = 0x80)
+        return h
+    DllCall("CloseHandle", "Ptr", h)
+    return 0
+}
+ReleaseLaunchLock(h) {
+    if h {
+        DllCall("ReleaseMutex", "Ptr", h)
+        DllCall("CloseHandle", "Ptr", h)
+    }
+}
+
 OpenCenter() {
     ; Already open? Just focus it — never spawn a second window.
     existing := WinExist("ahk_class " GridClass)
@@ -37,28 +62,47 @@ OpenCenter() {
         WinActivate("ahk_id " existing)
         return
     }
-    mon := FindVerticalMonitor()
-    MonitorGetWorkArea(mon, &l, &t, &r, &b)
-    before := WinGetList("ahk_class " GridClass)
-    ; wezterm execs PROG directly (CreateProcess), which can't run a .cmd — wrap in cmd /c.
-    Run('"' WezExe '" start --class ' GridClass ' -- cmd /c "' LaunchCmd '"')
+    ; Serialise the check-then-spawn against the desktop-icon launcher.
+    lock := AcquireLaunchLock()
+    if !lock {
+        ; Another launch is already in flight — don't race a second client in; wait
+        ; briefly for its window and focus that instead of spawning our own.
+        if WinWait("ahk_class " GridClass, , 6)
+            WinActivate("ahk_class " GridClass)
+        return
+    }
     win := 0
-    Loop 60 {                            ; wait up to ~6s for the new window
-        Sleep 100
-        for hwnd in WinGetList("ahk_class " GridClass) {
-            isNew := true
-            for old in before
-                if (old == hwnd) {
-                    isNew := false
+    try {
+        ; Re-check WinExist under the lock: the in-flight launch may have opened it.
+        existing := WinExist("ahk_class " GridClass)
+        if existing {
+            WinActivate("ahk_id " existing)
+            return
+        }
+        mon := FindVerticalMonitor()
+        MonitorGetWorkArea(mon, &l, &t, &r, &b)
+        before := WinGetList("ahk_class " GridClass)
+        ; wezterm execs PROG directly (CreateProcess), which can't run a .cmd — wrap in cmd /c.
+        Run('"' WezExe '" start --class ' GridClass ' -- cmd /c "' LaunchCmd '"')
+        Loop 60 {                            ; wait up to ~6s for the new window
+            Sleep 100
+            for hwnd in WinGetList("ahk_class " GridClass) {
+                isNew := true
+                for old in before
+                    if (old == hwnd) {
+                        isNew := false
+                        break
+                    }
+                if isNew {
+                    win := hwnd
                     break
                 }
-            if isNew {
-                win := hwnd
-                break
             }
+            if win
+                break
         }
-        if win
-            break
+    } finally {
+        ReleaseLaunchLock(lock)          ; hold only through check→Run→window-appears
     }
     ; Position only if the window is still alive (it can close fast on a launch
     ; error); guard so a vanished window never throws a script error.

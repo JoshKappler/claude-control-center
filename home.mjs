@@ -970,13 +970,56 @@ function settleInput() {
   settleTimer = setTimeout(() => { settleTimer = null; acceptInput = true; inbuf = ''; }, 200);
 }
 
+// A terminal query-response (OSC color report, DA/DSR reply, …) can reach stdin with
+// its ESC header already consumed, or split across pty reads, surfacing as a bare
+// printable run like `rgb:8888/ffff/0000`, `8888/ffff`, or `d7d7/d7d7/8787`. Those
+// bytes are byte-for-byte indistinguishable from typed keys, but their SHAPE is not:
+// a Home command is ALWAYS one keystroke, whereas a report fragment is a multi-char
+// string of hex groups (maybe an `rgb:`/`rgba:` tag) joined by `/ ; :`. Flag such a
+// run so its bytes can never fire an action. A lone key (`g`, `5`, `+`, …) can never
+// match — every branch first requires length >= 2.
+function isReportNoise(s) {
+  if (s.length < 2) return false;                              // a single keystroke is never noise
+  if (/rgba?:/i.test(s)) return true;                          // explicit colour-report tag
+  if (/^[0-9a-fA-F]*([/;:][0-9a-fA-F]*)+$/.test(s)) return true;   // hex groups + report separators
+  if (/^[0-9a-fA-F]{3,}$/.test(s)) return true;                // a bare hex run (a split fragment's tail)
+  return false;
+}
+
+// Guard decoded events before they reach the UI — works mid-session, not just during
+// the startup drain. Printable bursts are never commands on Home: a human types ONE
+// key per read. So:
+//   - If the chunk's printables look like a report fragment (isReportNoise), drop
+//     EVERY printable AND re-arm the settle window so continuation fragments split
+//     across the next reads are swallowed too. Escape events (arrows) still pass.
+//   - Otherwise a single-key action fires only when the chunk decoded to exactly ONE
+//     printable; a multi-printable burst (noise or paste) has its printables dropped.
+// Both rules are suspended while a text-entry prompt is open (state.prompt) so paste
+// into that field keeps working.
+function dispatchEvents(events) {
+  if (!state.prompt) {
+    const chars = events.filter((e) => e.kind === 'char');
+    let drop = false;
+    if (chars.length) {
+      if (isReportNoise(chars.map((e) => e.ch).join(''))) {
+        drop = true;
+        acceptInput = false; settleInput();          // eat report fragments still in flight
+      } else if (chars.length !== 1) {
+        drop = true;                                 // multi-key burst: noise or paste, never a command
+      }
+    }
+    if (drop) events = events.filter((e) => e.kind !== 'char');
+  }
+  for (const ev of events) dispatchEvent(ev);
+}
+
 function feed(chunk) {
   if (!acceptInput) { settleInput(); return; }     // swallow the startup report burst
   clearEscFlush();
   inbuf += Buffer.isBuffer(chunk) ? chunk.toString('latin1') : String(chunk);
   const { events, rest } = decodeInput(inbuf);
   inbuf = rest;
-  for (const ev of events) dispatchEvent(ev);
+  dispatchEvents(events);
   // A lingering, incomplete escape sequence (rare): drop it after a beat so its
   // bytes can never later be re-read as printable keys. A LONE Esc that lingers is
   // the physical Esc key — use it to cancel the new-folder prompt if one is open.
@@ -1041,10 +1084,11 @@ function isDirectRun() {
 if (isDirectRun()) main();
 
 // Test hooks (no effect in normal operation).
-export { decodeInput, feed, checkLaunchAllowed, LAUNCH_MIN_INTERVAL_MS, MAX_SESSION_PANES, chooseGrid, rowCounts, genLayout };
+export { decodeInput, isReportNoise, feed, checkLaunchAllowed, LAUNCH_MIN_INTERVAL_MS, MAX_SESSION_PANES, chooseGrid, rowCounts, genLayout };
 export function __setDispatch(fn) { dispatchEvent = fn || applyEvent; }
 export function __acceptInputNow() { acceptInput = true; inbuf = ''; }
 export function __resetInput() { acceptInput = false; inbuf = ''; if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; } }
+export function __getState() { return state; }
 
 // Render ONE frame at a given size and return the raw output string — lets the
 // layout be verified deterministically at any terminal size, with no TTY.
