@@ -15,6 +15,13 @@ CLAUDE.md files and explicit instructions always take precedence over this file.
   branch (usually `main`/`master`); keep the git setup as plain and basic as possible.
 - Skip trailing "what I changed" summaries. If the diff speaks for itself, don't narrate it.
 
+## Subagents / delegation
+- **Spawn subagents on Opus or lower, NEVER Fable.** When launching agents (the Agent
+  tool, workflows, any delegated task), pass an explicit `model` of `opus`, `sonnet`, or
+  `haiku`. Do not let a subagent inherit a Fable-tier session model. If you catch a
+  subagent that ran on Fable because no model was set, say so plainly rather than glossing
+  it (Josh, 2026-07-06).
+
 ## Style
 - Match the surrounding code's conventions, naming, and comment density.
 - Terse and direct. No filler, no flattery, no preamble.

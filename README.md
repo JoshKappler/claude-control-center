@@ -44,13 +44,17 @@ The dashboard always shows a plain-English guide at the top, and a bright
 
 Each launched tab holds 1–8 Claude instances, each with a titled border
 (`Claude 1`, `Claude 2`, …); the one you're typing into is **highlighted**, so you
-always know which agent has focus. The green **shortcut bar** pinned at the
-**bottom** of every tab lists the keys:
+always know which agent has focus. There is no always-on hint row — press
+**`Alt+S`** (shown as `Opt+S` on a Mac) in any window for the complete key list.
+On macOS the hints render the modifier as **`Opt`** (the key on the keyboard);
+the tables below use the generic `Alt` name:
 
 | Key | What it does |
 | --- | --- |
 | `Alt`+Arrows | Switch which agent is focused (move between the Claude panes) |
-| `Alt+[` / `Alt+]` | Switch between tabs (windows) |
+| `Alt+Tab` | Next window (cycles; macOS/Linux — Windows' OS owns this combo) |
+| `Alt+1`…`Alt+9` | Jump straight to window N (1 = Home) |
+| `Alt+=` / `Alt+-` | Grow / shrink the focused agent — or just drag a pane border with the mouse (`Alt+Shift+Arrows` pushes a single edge) |
 | `Alt+a` | Add another Claude agent to this tab |
 | `Ctrl+Alt+w` | Close the focused agent |
 | `Ctrl+Alt+q` | Close the whole tab (all its agents at once) |
@@ -59,10 +63,11 @@ always know which agent has focus. The green **shortcut bar** pinned at the
 | Mouse wheel / `Alt+PgUp` / `Alt+PgDn` | Scroll the chat history. While scrolled, the pane's top border shows **`SCROLL: <line>/<total>`** — your position indicator (Zellij has no graphical scrollbar to draw). `Alt+End` snaps back to the live end. |
 
 > The advertised text for all of these shortcuts is generated from a single
-> module, [`shortcuts.mjs`](shortcuts.mjs) — the bottom strip and the dashboard
-> cheatsheet both read from it, so they can't drift apart. The actual key
-> **bindings** live in the `dotfiles` repo's `~/.config/zellij/config.kdl`; keep
-> that file's keybinds in sync with `shortcuts.mjs`.
+> module, [`shortcuts.mjs`](shortcuts.mjs) — the Alt+S overlay and the dashboard
+> cheatsheet both read from it (platform-aware: `Opt` on macOS), so they can't
+> drift apart. The actual key **bindings** live in this repo's
+> `workspace/zellij/config.kdl` (deployed by `install.mjs`); keep its keybinds
+> in sync with `shortcuts.mjs`.
 
 Click the **Home** tab (leftmost) to come back to the dashboard. Casual navigation
 never closes an agent — closing is always a deliberate `Ctrl+Alt+w` / `Ctrl+Alt+q`.
@@ -170,7 +175,8 @@ full last result is in `~/.claude/state/cc/sync-last.json`.
 | `clone-all.mjs` | `node clone-all.mjs <root>` → clones missing + `--ff-only` pulls all your GitHub repos. Finds clones **one level deep too** (e.g. `other/algora`) and updates them in place instead of re-cloning a top-level duplicate. Never discards local work. |
 | `sync-daemon.mjs` | **Always-on background sync.** Self-updates this repo (`git pull --ff-only`), redeploys `workspace/` config via `install.mjs` when the pull brought commits, then runs `clone-all.mjs` over the projects folder it lives in. Run on a schedule by the macOS LaunchAgent. Logs to `~/.claude/state/cc/sync.log`. |
 | `macos/install-sync-agent.sh` | Installs `sync-daemon.mjs` as a LaunchAgent that runs at login and every 10 min. `macos/uninstall-sync-agent.sh` removes it. |
-| `hintbar.mjs` | A subtle dim one-row footnote at the bottom of each agent window: `Press Alt+S for keyboard shortcuts`. |
+| `themes.mjs` | **Color themes** — classic mac-terminal aesthetics (Homebrew, Pro, Ocean, Grass, Red Sands, Man Page, Novel, Solarized Dark). `[t]` on Home cycles; recolors the Home TUI, the Alt+S overlay, the statusline, zellij's chrome (live config reload) and WezTerm itself (via the watched `~/.config/wezterm/cc-theme.lua`). Choice persists in `~/.claude/state/cc/theme.json`. |
+| `hintbar.mjs` | Legacy one-row footnote (`Press Alt+S for keyboard shortcuts`). New layouts no longer include it — the Alt+S overlay carries every key; kept for tabs launched before the change. |
 | `cheatsheet.mjs` | The `Alt+S` overlay (floating pane): the **complete** shortcut list in plain English, grouped by context and sub-section. Renders from `shortcuts.mjs`. `Alt+S` **toggles** it (press again to close — it won't stack); any other key closes it too. |
 | `hooks/session-register.mjs` | SessionStart/SessionEnd hook: maintains `panes/<id>` and cleans up state. |
 | `hooks/subagent-track.mjs` | Subagent/tool hooks: maintains `subagents/<parent>/<agentId>.json`. |

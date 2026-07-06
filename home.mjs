@@ -25,7 +25,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { DASHBOARD, IN_TAB, fitGroups } from './shortcuts.mjs';
+import { DASHBOARD, IN_TAB, fitGroups, osKeys } from './shortcuts.mjs';
+import { currentTheme, nextTheme, applyTheme, tuiSgr } from './themes.mjs';
 
 // ---------- shared state ----------
 const HOME = os.homedir();
@@ -106,6 +107,8 @@ function gridKdl(n, rows, model, effort, app, nonce) {
   return '                pane split_direction="horizontal" {\n' + body + '\n                }';
 }
 
+// No hint row at the bottom any more: every key (including the resize story) lives
+// in the Alt+S overlay, and Home + its help advertise Alt+S. Agents get the full height.
 function genLayout(n, app, model = 'opus', effort = 'xhigh', nonce = Date.now().toString(36)) {
   const { rows } = chooseGrid(n, termCols(), termRows());
   return `// ${n} Claude agent${n === 1 ? '' : 's'} (${model}/${effort}) — generated for this window (balanced ${rows}-row grid). Alt+S reveals shortcuts.
@@ -117,7 +120,6 @@ layout {
     tab {
         pane split_direction="horizontal" {
 ${gridKdl(n, rows, model, effort, app, nonce)}
-                pane size=1 borderless=true command="node" { args "${app}/hintbar.mjs"; }
         }
     }
 }
@@ -159,13 +161,18 @@ function sgr(c) { return ESC + '[' + c + 'm'; }
 const RESET = sgr(0);
 const BOLD = sgr(1);
 const DIM = sgr(2);
-const GREEN = sgr(32);
-const BGREEN = sgr(92);
-const DGREEN = sgr(2) + sgr(32);   // muted green (dividers, files, hints)
-const BBLUE = sgr(94);             // keys only
-const RED = sgr(31);
-const BRED = sgr(91);
 const REV = sgr(7);                // reverse video — the unmistakable selection bar
+// The five color roles come from the active theme (themes.mjs) so [t] can restyle
+// the whole dashboard live. The historical names stay (GREEN = body text, BGREEN =
+// bright, DGREEN = muted, BBLUE = shortcut keys, RED/BRED = errors) — on a non-green
+// theme they simply hold that theme's inks.
+let GREEN, BGREEN, DGREEN, BBLUE, RED, BRED;
+let theme = currentTheme();
+function loadThemeColors() {
+  const t = tuiSgr(theme);
+  GREEN = t.TEXT; BGREEN = t.BRIGHT; DGREEN = t.DIM; BBLUE = t.KEY; RED = t.ALERT; BRED = t.ALERTBRIGHT;
+}
+loadThemeColors();
 
 function hdr(s) { return BOLD + BGREEN + s + RESET; }     // section header = bold bright green
 function keyc(s) { return BOLD + BBLUE + '[' + s + ']' + RESET; } // a shortcut key (blue)
@@ -479,7 +486,8 @@ function launch() {
   if (res.status !== 0) { setStatus('zellij returned error: ' + truncate(asciiSafe((res.stderr || res.stdout || '').toString().trim().split('\n').pop() || ''), 60), 'error'); return; }
   launchGuard.panes += n;   // count only panes that actually spawned
   setStatus('Launched ' + n + ' ' + model.label + ' agent' + (n === 1 ? '' : 's') + ' in ' + asciiSafe(name) +
-    '  (switch windows: Alt+] / Alt+[ or click a tab)', 'ok');
+    (process.platform === 'win32' ? '  (switch windows: Alt+1-9 or click a tab)'
+      : osKeys('  (switch windows: Alt+Tab or Alt+1-9, or click a tab)')), 'ok');
 }
 function gitPush() {
   // Sync EVERYTHING under the projects root (not just the folder you're browsing)
@@ -657,12 +665,15 @@ function render() {
   lines.push('  ' + GREEN + 'Step 1: press a number ' + RESET + keyc('1') + GREEN + '-' + RESET + keyc('8') + GREEN + ' = how many' + RESET +
     DGREEN + ' (now: ' + RESET + BOLD + BGREEN + state.count + RESET + DGREEN + ')' + RESET + GREEN + '    Step 2: press ' + RESET + keyc('Enter'));
   lines.push('  ' + keyc('m') + GREEN + ' model: ' + RESET + BOLD + BGREEN + pad((MODELS[state.modelIdx] || MODELS[0]).label, 7) + RESET +
-    '   ' + keyc('e') + GREEN + ' effort: ' + RESET + BOLD + BGREEN + (EFFORTS[state.effortIdx] || 'xhigh') + RESET +
+    '   ' + keyc('e') + GREEN + ' effort: ' + RESET + BOLD + BGREEN + pad(EFFORTS[state.effortIdx] || 'xhigh', 6) + RESET +
+    '   ' + keyc('t') + GREEN + ' theme: ' + RESET + BOLD + BGREEN + theme.label + RESET +
     DGREEN + '   (press to cycle)' + RESET);
-  lines.push('  ' + DGREEN + 'in a tab, switch: ' + RESET + keyc('Alt+arrows') + GREEN + ' between agents' + RESET + DGREEN + ' . ' + RESET +
-    keyc('Alt+[') + keyc('Alt+]') + GREEN + ' between tabs' + RESET + DGREEN + '  (focused agent is highlighted)' + RESET);
-  lines.push('  ' + DGREEN + 'in a tab, manage: ' + RESET + keyc('Alt+a') + GREEN + ' add' + RESET + DGREEN + ' . ' + RESET +
-    keyc('Ctrl+Alt+w') + GREEN + ' close agent' + RESET + DGREEN + ' . ' + RESET + keyc('Ctrl+Alt+q') + GREEN + ' close whole tab' + RESET);
+  // Alt+Tab is only a real combo on macOS/Linux (Windows' OS owns it) — hide it there.
+  lines.push('  ' + DGREEN + 'in a tab, switch: ' + RESET + keyc(osKeys('Alt+arrows')) + GREEN + ' between agents' + RESET + DGREEN + ' . ' + RESET +
+    (process.platform === 'win32' ? '' : keyc(osKeys('Alt+Tab')) + GREEN + ' next window' + RESET + DGREEN + ' . ' + RESET) +
+    keyc(osKeys('Alt+1-9')) + GREEN + ' jump to window' + RESET);
+  lines.push('  ' + DGREEN + 'in a tab, manage: ' + RESET + keyc(osKeys('Alt+a')) + GREEN + ' add' + RESET + DGREEN + ' . ' + RESET +
+    keyc(osKeys('Ctrl+Alt+w')) + GREEN + ' close agent' + RESET + DGREEN + ' . ' + RESET + keyc(osKeys('Ctrl+Alt+q')) + GREEN + ' close whole window' + RESET);
   lines.push(sep);
 
   // Sync — the GitHub buttons. Plain-English, with the safety promise spelled out.
@@ -808,12 +819,14 @@ function renderHelp(W) {
   L.push('   ' + g('Pick the model with ') + k('m') + g(' and the effort level with ') + k('e') + g(' first (Opus / Sonnet / Haiku / Fable).'));
   L.push('   ' + g('They open in a new window (tab) that runs in the folder you have selected.'));
   L.push('   ' + g('Each agent has a titled border ("Claude 1", "Claude 2", ...); the one you are'));
-  L.push('   ' + g('typing into is highlighted. Move between them with ') + k('Alt+Arrow keys') + g('.'));
-  L.push('   ' + g('Switch between tabs (windows) with ') + k('Alt+[') + g(' and ') + k('Alt+]') + g('.'));
-  L.push('   ' + g('Add another Claude: ') + k('Alt+a') + g('.   Resize one: ') + k('Alt+Shift+Arrows') + g('.   Jump back here: ') + k('Alt+h') + g('.'));
-  L.push('   ' + g('Close one agent: ') + k('Ctrl+Alt+w') + g('.   Close the whole tab: ') + k('Ctrl+Alt+q') + g('.'));
+  L.push('   ' + g('typing into is highlighted. Move between them with ') + k(osKeys('Alt+Arrow keys')) + g('.'));
+  if (process.platform === 'win32') L.push('   ' + g('Jump straight to a window with ') + k('Alt+1') + g('-') + k('Alt+9') + g(' (1 = Home).'));
+  else L.push('   ' + g('Switch windows with ') + k(osKeys('Alt+Tab')) + g(', or jump straight to one with ') + k(osKeys('Alt+1')) + g('-') + k(osKeys('Alt+9')) + g(' (1 = Home).'));
+  L.push('   ' + g('Resize an agent: ') + k(osKeys('Alt+=')) + g(' grows it, ') + k(osKeys('Alt+-')) + g(' shrinks it -- or just drag its border with the mouse.'));
+  L.push('   ' + g('Add another Claude: ') + k(osKeys('Alt+a')) + g('.   Jump back here: ') + k(osKeys('Alt+h')) + g('.'));
+  L.push('   ' + g('Close one agent: ') + k(osKeys('Ctrl+Alt+w')) + g('.   Close the whole window: ') + k(osKeys('Ctrl+Alt+q')) + g('.'));
   L.push('   ' + g('Locked out of Claude by a Zellij shortcut? ') + k('Ctrl+g') + g(' locks all keys to Claude (press it again to unlock).'));
-  L.push('   ' + g('Forgot a key? Press ') + k('Alt+S') + g(' in any window for the full list on screen.'));
+  L.push('   ' + g('Forgot a key? Press ') + k(osKeys('Alt+S')) + g(' in any window for the full list on screen.'));
   L.push('');
   L.push(h('4. Making a new project folder'));
   L.push('   ' + g('Press ') + k('n') + g(', type a name, and press ') + k('Enter') + g(' to create a folder inside the one you are'));
@@ -826,8 +839,14 @@ function renderHelp(W) {
   L.push('   ' + k('c') + g(' = ') + h('PULL') + g(': downloads everything from GitHub and brings repos up to date.'));
   L.push('       ' + DGREEN + 'Your local commits and unsaved changes are never deleted.' + RESET);
   L.push('');
-  L.push(h('6. Quitting'));
+  L.push(h('6. Changing the look'));
+  L.push('   ' + g('Press ') + k('t') + g(' to cycle the color theme (Homebrew, Pro, Ocean, Grass, Red Sands, ...).'));
+  L.push('   ' + g('It recolors everything at once: this dashboard, every agent window, and the terminal.'));
+  L.push('');
+  L.push(h('7. Quitting'));
   L.push('   ' + k('q') + g(' closes this dashboard. Your agent windows keep running.'));
+  L.push('   ' + g('Closing the terminal window (even Cmd+Q) never kills agents: the session only'));
+  L.push('   ' + g('detaches, and ') + k('Ctrl+Alt+C') + g(' brings the whole thing back exactly as it was.'));
   L.push(sep);
   L.push(BOLD + BGREEN + 'Press any key to go back.' + RESET);
   const body = L.map((l) => l + CLR_EOL).join('\r\n');
@@ -871,6 +890,12 @@ function onPrintable(ch) {
   if (ch === '-' || ch === '_') { state.count = Math.max(1, state.count - 1); redraw(); return; }
   if (ch === 'm') { state.modelIdx = (state.modelIdx + 1) % MODELS.length; setStatus('', 'info'); redraw(); return; }
   if (ch === 'e') { state.effortIdx = (state.effortIdx + 1) % EFFORTS.length; setStatus('', 'info'); redraw(); return; }
+  if (ch === 't') {
+    theme = applyTheme(nextTheme(theme.id).id);
+    loadThemeColors();
+    setStatus('Theme: ' + theme.label + ' -- recoloring everything (terminal + windows follow in a moment)', 'ok');
+    redraw(); return;
+  }
   if (ch === 'c') { cloneAll(); redraw(); return; }
   if (ch === 'g') { gitPush(); redraw(); return; }
   if (ch === 'n') { state.prompt = 'newfolder'; state.promptValue = ''; setStatus('', 'info'); redraw(); return; }

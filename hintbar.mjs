@@ -8,14 +8,18 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { osKeys } from './shortcuts.mjs';
+import { tuiSgr } from './themes.mjs';
 
 const ESC = '\x1b';
 const RESET = ESC + '[0m';
-const DIM = ESC + '[2m' + ESC + '[38;5;28m';   // dim, dark-green — quiet on black
+const DIM = ESC + '[2m' + tuiSgr().DIM;   // dim + the theme's muted ink — a quiet footnote
 
 function cols() { return (process.stdout.columns && process.stdout.columns > 0) ? process.stdout.columns : 80; }
 
-const HINT = ' Press Alt+S for keyboard shortcuts';
+// NOTE: new layouts no longer include this bar (the Alt+S overlay carries all the
+// keys); it keeps working for tabs launched before that change.
+const HINT = osKeys(' Press Alt+S for keyboard shortcuts');
 
 // Build the hint text, clipped to the row width (no padding — dim text, not a bar).
 export function buildHint(width) {

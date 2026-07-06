@@ -62,8 +62,10 @@ for (let n = 1; n <= 8; n++) {
     keys.length === n && new Set(keys).size === n && keys.every((k) => k.startsWith('nonceA-')));
   check(`genLayout(${n}) still passes the claude flags through`,
     kdl.includes('"--dangerously-skip-permissions"') && kdl.includes('"--model" "opus"') && kdl.includes('"--effort" "xhigh"'));
-  check(`genLayout(${n}) includes the tab strip + a subtle hintbar`,
-    kdl.includes('zellij:tab-bar') && kdl.includes('/x/hintbar.mjs'));
+  // The bottom hint row is GONE by design: all keys live in the Alt+S overlay, so
+  // agents get the full height. Only the top tab strip remains.
+  check(`genLayout(${n}) includes the tab strip and no bottom hint row`,
+    kdl.includes('zellij:tab-bar') && !kdl.includes('hintbar.mjs'));
   check(`genLayout(${n}) has no old agentbar/separator panes`,
     !kdl.includes('agentbar.mjs') && !kdl.includes('separator.mjs'));
   // every `args "..."` child node must end in a terminator before its closing brace

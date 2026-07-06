@@ -25,14 +25,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { IN_TAB, DASHBOARD } from './shortcuts.mjs';
+import { IN_TAB, DASHBOARD, osKeys } from './shortcuts.mjs';
+import { tuiSgr } from './themes.mjs';
 
 const ESC = '\x1b';
 const RESET = ESC + '[0m';
 const BOLD = ESC + '[1m';
-const GREEN = ESC + '[38;5;47m';
-const DGREEN = ESC + '[38;5;28m';
-const CYAN = ESC + '[38;5;51m';
+// Colors come from the active theme (themes.mjs); the overlay is spawned fresh on
+// every Alt+S, so it always opens in the current look. GREEN/DGREEN/CYAN keep their
+// historical roles: body text / muted headings / shortcut keys.
+const T = tuiSgr();
+const GREEN = T.BRIGHT;
+const DGREEN = T.DIM;
+const CYAN = T.KEY;
 const CLEAR = ESC + '[2J' + ESC + '[H';
 const HIDE = ESC + '[?25l';
 const SHOW = ESC + '[?25h';
@@ -87,7 +92,7 @@ export function buildSheet(width = 100) {
 
   const L = [];
   L.push(BOLD + GREEN + '  KEYBOARD SHORTCUTS' + RESET);
-  L.push('  ' + DGREEN + 'press Alt+S again, or any other key, to close' + RESET);
+  L.push('  ' + DGREEN + osKeys('press Alt+S again, or any other key, to close') + RESET);
   L.push('');
 
   const TWO_COL_MIN = 88;

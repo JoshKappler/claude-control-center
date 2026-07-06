@@ -5,10 +5,24 @@ local config = wezterm.config_builder()
 
 config.font = wezterm.font_with_fallback { 'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Cascadia Code', 'Consolas' }
 config.font_size = {{FONT_SIZE}}
-config.color_scheme = 'Homebrew'   -- classic green-on-black phosphor look
+
+-- COLOR THEME: themes.mjs writes ~/.config/wezterm/cc-theme.lua when you press [t]
+-- on the Home dashboard; watching it makes every open window recolor instantly.
+-- Unknown/missing scheme names fall back to the classic Homebrew phosphor look.
+config.color_scheme = 'Homebrew'
+local cc_theme_path = wezterm.home_dir .. '/.config/wezterm/cc-theme.lua'
+local theme_ok, cc_theme = pcall(dofile, cc_theme_path)
+if theme_ok and type(cc_theme) == 'table' and type(cc_theme.scheme) == 'string' then
+  local builtins = wezterm.color.get_builtin_schemes()
+  if builtins[cc_theme.scheme] then config.color_scheme = cc_theme.scheme end
+end
+wezterm.add_to_config_reload_watch_list(cc_theme_path)
+
 config.hide_tab_bar_if_only_one_tab = true
 config.window_decorations = 'TITLE | RESIZE'   -- title bar so the control-center window is easy to drag/move
-config.window_close_confirmation = 'NeverPrompt'
+-- Any window-close path asks first (there is always a live zellij inside) — and even
+-- a confirmed close only DETACHES the zellij session; nothing running is lost.
+config.window_close_confirmation = 'AlwaysPrompt'
 config.adjust_window_size_when_changing_font_size = false
 config.scrollback_lines = 10000
 {{WIN_DEFAULT_PROG}}
@@ -23,6 +37,20 @@ config.keys = {
   { key = 't', mods = 'LEADER', action = wezterm.action.SpawnTab 'CurrentPaneDomain' },
   { key = 'w', mods = 'LEADER', action = wezterm.action.CloseCurrentTab { confirm = false } },
   { key = 'f', mods = 'LEADER', action = wezterm.action.ToggleFullScreen },
+}
+-- macOS: an accidental Cmd+Q must never take down the control center. Dead-key it;
+-- quitting stays available from the menu bar, and even THAT only detaches zellij —
+-- Ctrl+Alt+C (Hammerspoon) reattaches with every agent still running.
+if wezterm.target_triple:find('apple') then
+  table.insert(config.keys, { key = 'q', mods = 'CMD', action = wezterm.action.DisableDefaultAssignment })
+end
+
+-- Ctrl+scroll normally ZOOMS the font — mid-session it reads as a broken second
+-- "resize" system next to zellij's real pane resize, so it's disabled. Font size
+-- still adjusts with Cmd/Ctrl+= and Cmd/Ctrl+- (the WezTerm defaults).
+config.mouse_bindings = {
+  { event = { Down = { streak = 1, button = { WheelUp = 1 } } },   mods = 'CTRL', action = wezterm.action.Nop },
+  { event = { Down = { streak = 1, button = { WheelDown = 1 } } }, mods = 'CTRL', action = wezterm.action.Nop },
 }
 
 -- Lightweight cheat cue: while LEADER is held, show the available window/tab keys.

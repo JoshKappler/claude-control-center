@@ -48,6 +48,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { tuiSgr } from './themes.mjs';
 
 // ---- state path helpers (inlined; no shared import, per plan) --------------
 function stateRoot() {
@@ -58,7 +59,9 @@ function agentsDir() {
 }
 
 // ---- small utils ----------------------------------------------------------
-const GREEN = '\x1b[32m';
+// The accent follows the active theme (themes.mjs is deployed next to this file
+// by install.mjs, so the import works in the repo and in ~/.local/share/claude-cc).
+const GREEN = tuiSgr().TEXT;
 const RESET = '\x1b[0m';
 
 // Strip to printable ASCII, collapse whitespace, drop common markdown noise.

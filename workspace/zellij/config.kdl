@@ -1,6 +1,8 @@
 // ~/.config/zellij/config.kdl  — deployed by `node install.mjs` from this repo.
 // Script paths below are rewritten to this repo's absolute location at install time.
-theme "homebrew"
+// The "cc" theme block is GENERATED from themes.mjs (pick with [t] on Home) — zellij
+// live-reloads this file, so a theme switch recolors the running session too.
+theme "cc"
 // Pane frames ON: each agent gets a thin titled border ("Claude 1", "Claude 2",
 // ...) and the FOCUSED agent's border is highlighted, so you always see which
 // instance your keystrokes go to. Home and the hint/tab bars stay borderless.
@@ -28,147 +30,7 @@ on_force_close "detach"
 // resurrectable snapshot instead of four lost hours.
 session_serialization true
 
-// Green-on-black phosphor theme to match WezTerm's Homebrew scheme — in zellij's
-// component format (0.42+), NOT the old fg/bg palette. The old format painted
-// inactive tab ribbons with `fg` and the active one with `green`, and this theme
-// needs both to be phosphor green — so every tab looked identical and you could
-// not tell which tab you were in. With components the ACTIVE tab is the single
-// solid bright-green block (black text) while inactive tabs are dim green text on
-// plain black. Frames get the same split: the focused agent's border is bright,
-// unfocused ones dim.
-themes {
-    homebrew {
-        text_unselected {
-            base 51 255 51
-            background 0 0 0
-            emphasis_0 136 255 0
-            emphasis_1 0 255 204
-            emphasis_2 51 255 51
-            emphasis_3 51 255 170
-        }
-        text_selected {
-            base 0 0 0
-            background 51 255 51
-            emphasis_0 136 255 0
-            emphasis_1 0 204 102
-            emphasis_2 0 100 0
-            emphasis_3 0 153 0
-        }
-        // INACTIVE tabs: dim green text, no block — they melt into the bar.
-        ribbon_unselected {
-            base 30 150 30
-            background 0 0 0
-            emphasis_0 0 204 0
-            emphasis_1 204 255 204
-            emphasis_2 0 204 102
-            emphasis_3 51 255 170
-        }
-        // ACTIVE tab: the one solid bright-green block on the bar.
-        ribbon_selected {
-            base 0 0 0
-            background 51 255 51
-            emphasis_0 0 204 0
-            emphasis_1 0 100 0
-            emphasis_2 0 153 0
-            emphasis_3 0 204 102
-        }
-        table_title {
-            base 170 255 0
-            background 0 0 0
-            emphasis_0 136 255 0
-            emphasis_1 0 255 204
-            emphasis_2 51 255 51
-            emphasis_3 51 255 170
-        }
-        table_cell_unselected {
-            base 51 255 51
-            background 0 0 0
-            emphasis_0 136 255 0
-            emphasis_1 0 255 204
-            emphasis_2 0 204 102
-            emphasis_3 51 255 170
-        }
-        table_cell_selected {
-            base 0 0 0
-            background 51 255 51
-            emphasis_0 136 255 0
-            emphasis_1 0 100 0
-            emphasis_2 0 153 0
-            emphasis_3 0 204 102
-        }
-        list_unselected {
-            base 51 255 51
-            background 0 0 0
-            emphasis_0 136 255 0
-            emphasis_1 0 255 204
-            emphasis_2 0 204 102
-            emphasis_3 51 255 170
-        }
-        list_selected {
-            base 0 0 0
-            background 51 255 51
-            emphasis_0 136 255 0
-            emphasis_1 0 100 0
-            emphasis_2 0 153 0
-            emphasis_3 0 204 102
-        }
-        // Unfocused agent borders: dim. The focused agent's border: bright.
-        frame_unselected {
-            base 30 150 30
-            background 0 0 0
-            emphasis_0 136 255 0
-            emphasis_1 0 255 204
-            emphasis_2 0 204 102
-            emphasis_3 51 255 170
-        }
-        frame_selected {
-            base 51 255 51
-            background 0 0 0
-            emphasis_0 170 255 0
-            emphasis_1 0 255 204
-            emphasis_2 51 255 170
-            emphasis_3 0 204 102
-        }
-        frame_highlight {
-            base 170 255 0
-            background 0 0 0
-            emphasis_0 136 255 0
-            emphasis_1 170 255 0
-            emphasis_2 170 255 0
-            emphasis_3 170 255 0
-        }
-        exit_code_success {
-            base 51 255 51
-            background 0 0 0
-            emphasis_0 0 255 204
-            emphasis_1 0 204 102
-            emphasis_2 51 255 170
-            emphasis_3 204 255 204
-        }
-        // The EXITED banner ("press Enter to re-run" = resume the conversation)
-        // renders in this — phosphor yellow so a dead agent is spottable.
-        exit_code_error {
-            base 170 255 0
-            background 0 0 0
-            emphasis_0 136 255 0
-            emphasis_1 0 204 0
-            emphasis_2 0 204 102
-            emphasis_3 51 255 170
-        }
-        multiplayer_user_colors {
-            player_1 0 255 204
-            player_2 170 255 0
-            player_3 51 255 170
-            player_4 204 255 204
-            player_5 0 204 102
-            player_6 136 255 0
-            player_7 0 204 0
-            player_8 51 255 51
-            player_9 30 150 30
-            player_10 0 153 0
-        }
-    }
-}
+{{ZELLIJ_THEMES}}
 
 keybinds {
     // Ctrl+g toggles LOCKED mode, which passes every key straight to Claude so
@@ -201,8 +63,15 @@ keybinds {
         bind "Alt a" { Run "node" "{{APP}}/agent-pane.mjs" "--key" "auto" "--" "--dangerously-skip-permissions"; }
         // Alt+h: jump straight back to the Home dashboard (always the first tab).
         bind "Alt h" { GoToTab 1; }
-        // Alt+Shift+Arrows: resize the focused agent (grow toward that edge). Pairs
-        // with Alt+Arrows (move focus) — same fingers, add Shift to resize.
+        // RESIZE — one system, all zellij, documented only in the Alt+S overlay:
+        //   Alt+= / Alt+-       grow / shrink the focused agent (the simple pair)
+        //   drag a pane border  the same resize with the mouse (mouse_mode above)
+        //   Alt+Shift+Arrows    push one edge in that direction (fine-tuning)
+        // WezTerm's Ctrl+scroll font-zoom is disabled in wezterm.lua — it LOOKED
+        // like a second, clashing resize system and is gone.
+        bind "Alt =" { Resize "Increase"; }
+        bind "Alt +" { Resize "Increase"; }
+        bind "Alt -" { Resize "Decrease"; }
         bind "Alt Shift Left"  { Resize "Increase Left"; }
         bind "Alt Shift Right" { Resize "Increase Right"; }
         bind "Alt Shift Up"    { Resize "Increase Up"; }
@@ -212,9 +81,22 @@ keybinds {
         // Ctrl+Alt+w: DELIBERATE manual close of the focused agent. Closing is the
         // only way an agent dies — casual tab/pane navigation never can (see below).
         bind "Ctrl Alt w" { CloseFocus; }
-        // Switch between agent windows (tabs). Repurpose Alt+[ / Alt+] — zellij's
-        // default swap-layout keys, which we don't use — into prev/next tab, so
-        // the brackets you used to see now actually move between windows.
+        // Switch between agent windows (tabs), PLAINLY:
+        //   Alt+Tab   next window (cycles) — the combo everyone already knows.
+        //             Advertised on macOS/Linux only; Windows' OS owns Alt+Tab.
+        //   Alt+1…9   jump straight to window N (1 = Home). Works everywhere.
+        // Alt+[ / Alt+] remain bound as silent fallbacks but are no longer
+        // advertised anywhere — the bracket hints read like a typo.
+        bind "Alt Tab" { GoToNextTab; }
+        bind "Alt 1" { GoToTab 1; }
+        bind "Alt 2" { GoToTab 2; }
+        bind "Alt 3" { GoToTab 3; }
+        bind "Alt 4" { GoToTab 4; }
+        bind "Alt 5" { GoToTab 5; }
+        bind "Alt 6" { GoToTab 6; }
+        bind "Alt 7" { GoToTab 7; }
+        bind "Alt 8" { GoToTab 8; }
+        bind "Alt 9" { GoToTab 9; }
         bind "Alt [" { GoToPreviousTab; }
         bind "Alt ]" { GoToNextTab; }
         // Alt+Arrows: move focus between the Claude agents INSIDE this tab. The

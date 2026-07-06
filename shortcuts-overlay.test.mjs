@@ -8,7 +8,7 @@
 //
 // Run: node shortcuts-overlay.test.mjs   (zero deps; exits non-zero on failure)
 
-import { IN_TAB, DASHBOARD } from './shortcuts.mjs';
+import { IN_TAB, DASHBOARD, osKeys } from './shortcuts.mjs';
 import { buildHint } from './hintbar.mjs';
 import { buildSheet } from './cheatsheet.mjs';
 
@@ -30,15 +30,17 @@ check('every IN_TAB entry has non-empty keys + label',
 for (const w of [20, 80, 200]) {
   check(`buildHint(${w}) fits within ${w} cols`, buildHint(w).length <= w, `${buildHint(w).length}`);
 }
-check('hint names Alt+S', buildHint(80).includes('Alt+S'));
+// The advertised key label is platform-aware (Opt on a Mac, Alt elsewhere).
+check('hint names the reveal key', buildHint(80).includes(osKeys('Alt+S')));
 
 // --- Overlay lists BOTH contexts, every key, grouped into sub-sections. ---
 const sheet = buildSheet();
 const text = stripAnsi(sheet.join('\n'));
 check('overlay has the agent-window section', text.includes('IN AN AGENT WINDOW'));
 check('overlay has the home-dashboard section', text.includes('ON THE HOME DASHBOARD'));
-// Closing is now a toggle — the header must say Alt+S (also) closes it.
-check('overlay says Alt+S closes it', /alt\+s/i.test(text) && /close/i.test(text));
+// Closing is now a toggle — the header must say Alt+S / Opt+S (also) closes it.
+check('overlay says the reveal key closes it',
+  text.toLowerCase().includes(osKeys('Alt+S').toLowerCase()) && /close/i.test(text));
 // Every agent-window key is listed and carries a fuller plain-English description.
 for (const it of IN_TAB) {
   check(`overlay lists agent key "${it.keys}"`, text.includes(it.keys));

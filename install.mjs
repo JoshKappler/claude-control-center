@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { currentTheme, zellijThemeKdl, writeWeztermTheme } from './themes.mjs';
 
 const APP = path.dirname(fileURLToPath(import.meta.url));
 const APP_FWD = APP.replace(/\\/g, '/');
@@ -33,7 +34,8 @@ function render(text) {
     .split('{{APP}}').join(APP_FWD)
     .split('{{FONT_SIZE}}').join(MAC ? '14.0' : '11.0')
     .split('{{WIN_DEFAULT_PROG}}').join(WIN ? pwshProg() : '')
-    .split('{{COPY_COMMAND}}').join(MAC ? 'copy_command "pbcopy"' : '// (no copy_command on Windows: WezTerm handles OSC52 copy natively)');
+    .split('{{COPY_COMMAND}}').join(MAC ? 'copy_command "pbcopy"' : '// (no copy_command on Windows: WezTerm handles OSC52 copy natively)')
+    .split('{{ZELLIJ_THEMES}}').join(zellijThemeKdl(currentTheme()));
 }
 
 // ---- fs helpers ------------------------------------------------------------
@@ -88,6 +90,10 @@ console.log('zellij + wezterm:');
 deployFile(path.join(WS, 'zellij', 'config.kdl'), path.join(cfg, 'zellij', 'config.kdl'), true);
 deployFile(path.join(WS, 'zellij', 'layouts', 'cc-default.kdl'), path.join(cfg, 'zellij', 'layouts', 'cc-default.kdl'), true);
 deployFile(path.join(WS, 'wezterm', 'wezterm.lua'), path.join(cfg, 'wezterm', 'wezterm.lua'), true);
+// The machine's chosen theme, in the shape wezterm.lua watches for. Written on
+// every install so a fresh machine starts colored and a theme switch sticks.
+writeWeztermTheme(currentTheme());
+console.log('  ->', path.join(cfg, 'wezterm', 'cc-theme.lua'), '(theme: ' + currentTheme().label + ')');
 
 console.log('claude (global settings, instructions, commands):');
 deployFile(path.join(WS, 'claude', 'settings.json'), path.join(claudeDir, 'settings.json'), false);
@@ -96,6 +102,7 @@ deployDir(path.join(WS, 'claude', 'commands'), path.join(claudeDir, 'commands'),
 
 console.log('always-on hooks + statusline (referenced by settings.json):');
 deployFile(path.join(APP, 'statusline.mjs'), path.join(ccState, 'statusline.mjs'), false);
+deployFile(path.join(APP, 'themes.mjs'), path.join(ccState, 'themes.mjs'), false);   // statusline.mjs imports it
 deployDir(path.join(APP, 'hooks'), path.join(ccState, 'hooks'), false);
 
 if (WIN) {
