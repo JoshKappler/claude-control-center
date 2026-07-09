@@ -25,6 +25,16 @@ config.window_decorations = 'TITLE | RESIZE'   -- title bar so the control-cente
 config.window_close_confirmation = 'AlwaysPrompt'
 config.adjust_window_size_when_changing_font_size = false
 config.scrollback_lines = 10000
+-- KEY-EVENT SAFETY (2026-07-08 incidents): with win32-input-mode on, WezTerm
+-- encodes EVERY key event — releases and bare modifiers like a lone right-ctrl
+-- included — as CSI sequences for the app inside. Zellij's young Windows input
+-- path misdecoded some of those into phantom keys that fired REAL commands in
+-- Claude panes: a left arrow became ctrl+b (backgrounded a session, 16:37) and
+-- stray right-side keys produced /clear three times (17:11 x2, 17:31), wiping
+-- working conversations. Deny the mode entirely: classic VT encoding transmits
+-- only genuine printable/navigation keydowns, so key releases and lone
+-- modifiers stop existing as input. Costs exotic key fidelity we don't use.
+config.allow_win32_input_mode = false
 {{WIN_DEFAULT_PROG}}
 -- Leader = CTRL+a, deliberately distinct from Zellij's Ctrl-p/Ctrl-t modes so the two
 -- never collide. WezTerm manages only WINDOWS/TABS here; Zellij owns panes inside a window.

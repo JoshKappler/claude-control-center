@@ -95,9 +95,13 @@ deployFile(path.join(WS, 'wezterm', 'wezterm.lua'), path.join(cfg, 'wezterm', 'w
 writeWeztermTheme(currentTheme());
 console.log('  ->', path.join(cfg, 'wezterm', 'cc-theme.lua'), '(theme: ' + currentTheme().label + ')');
 
-console.log('claude (global settings, instructions, commands):');
+console.log('claude (global settings, instructions, keybindings, commands):');
 deployFile(path.join(WS, 'claude', 'settings.json'), path.join(claudeDir, 'settings.json'), false);
 deployFile(path.join(WS, 'claude', 'CLAUDE.md'), path.join(claudeDir, 'CLAUDE.md'), false);
+// Keybinding safety overrides (e.g. bare ctrl+b no longer backgrounds a task —
+// mangled arrow-key input kept firing it; the deliberate ctrl+x ctrl+b chord
+// remains). Managed here so the fix survives machine loss and reaches every box.
+deployFile(path.join(WS, 'claude', 'keybindings.json'), path.join(claudeDir, 'keybindings.json'), false);
 deployDir(path.join(WS, 'claude', 'commands'), path.join(claudeDir, 'commands'), false);
 
 console.log('always-on hooks + statusline (referenced by settings.json):');

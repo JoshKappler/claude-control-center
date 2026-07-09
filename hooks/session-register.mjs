@@ -9,6 +9,16 @@
 //     agent-keys/<CC_PANE_KEY> = <session_id> — the pane->conversation binding
 //     agent-pane.mjs resumes from on its next run. Fires on /clear and resume
 //     too, so the binding always tracks the pane's CURRENT conversation.
+//     Every rebind is journaled (agent-keys/<key>.log) and the displaced id kept
+//     (agent-keys/<key>.prev), so "what was this pane 5 minutes ago" is one read,
+//     not transcript archaeology.
+//   - SessionStart with source "clear": prints a recovery note to stdout, which
+//     Claude Code injects as the NEW session's context. The 2026-07-08 incidents:
+//     mangled key input (stray arrow/right-side keys through WezTerm+zellij on
+//     Windows) fired /clear in working panes, which rolls the pane to a fresh
+//     session id — to the user the conversation looked destroyed. The note tells
+//     the fresh Claude the predecessor's id and that `/resume <id>` restores it,
+//     so an accidental clear is self-announcing and one step to undo.
 //   - SessionEnd: prunes this session's agents/<session_id>.json, any panes/*
 //     file whose contents === session_id, and the subagents/<session_id>/ dir.
 //     agent-keys/* is deliberately NOT pruned: surviving the claude process's
@@ -25,6 +35,7 @@
 // --- Sample stdin fixtures (Claude Code hook payloads) -----------------------
 // SessionStart:
 //   { "hook_event_name": "SessionStart", "session_id": "sess-abc123",
+//     "source": "startup",   // "startup" | "resume" | "clear" | "compact"
 //     "cwd": "/home/josh/projects/scuttle" }
 // SessionEnd:
 //   { "hook_event_name": "SessionEnd", "session_id": "sess-abc123",
@@ -108,7 +119,7 @@ function safeRmDir(p) {
   }
 }
 
-function onSessionStart(sessionId) {
+function onSessionStart(sessionId, source) {
   if (!sessionId) return;
   const paneId = process.env.ZELLIJ_PANE_ID;
   if (paneId) {
@@ -124,12 +135,33 @@ function onSessionStart(sessionId) {
   const key = process.env.CC_PANE_KEY;
   if (key) {
     ensureDir(agentKeysDir());
+    const file = path.join(agentKeysDir(), String(key).replace(/[^A-Za-z0-9._-]/g, '-'));
+    let prev = null;
+    try { prev = fs.readFileSync(file, 'utf8').trim() || null; } catch { /* first binding */ }
     try {
-      fs.writeFileSync(
-        path.join(agentKeysDir(), String(key).replace(/[^A-Za-z0-9._-]/g, '-')),
-        String(sessionId), 'utf8');
+      fs.writeFileSync(file, String(sessionId), 'utf8');
     } catch {
       /* ignore */
+    }
+    if (prev && prev !== String(sessionId)) {
+      // Journal the rebind and keep the displaced id — recovery breadcrumbs.
+      try {
+        fs.appendFileSync(file + '.log',
+          `${new Date().toISOString()} ${source || '?'} ${prev} -> ${sessionId}\n`, 'utf8');
+      } catch { /* ignore */ }
+      try { fs.writeFileSync(file + '.prev', prev, 'utf8'); } catch { /* ignore */ }
+      if (source === 'clear') {
+        // stdout of a SessionStart hook becomes context in the NEW session: make
+        // the fresh Claude able to undo an accidental /clear (see header).
+        console.log(
+          `[claude-cc] /clear just rolled this pane off session ${prev} — that ` +
+          `conversation is intact on disk, and the user can restore it by typing ` +
+          `/resume ${prev} here. This machine has a history of stray key input ` +
+          `firing /clear on its own (2026-07-08 incidents). If the user's first ` +
+          `message suggests they lost a session unexpectedly or did not mean to ` +
+          `clear, tell them the restore command immediately. If they cleared on ` +
+          `purpose, say nothing about this.`);
+      }
     }
   }
 }
@@ -172,7 +204,7 @@ async function main() {
   const event = j.hook_event_name;
   const sessionId = j.session_id;
 
-  if (event === 'SessionStart') onSessionStart(sessionId);
+  if (event === 'SessionStart') onSessionStart(sessionId, j.source);
   else if (event === 'SessionEnd') onSessionEnd(sessionId);
 }
 

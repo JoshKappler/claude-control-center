@@ -67,6 +67,29 @@ for (const ahk of ['claude-cc.ahk', 'open-control-center.ahk']) {
     kdl.includes('{{COPY_COMMAND}}') && !/^\s*copy_command/m.test(kdl));
 }
 
+// --- wezterm keeps phantom key events out of the input stream ------------------
+// 2026-07-08 incidents: win32-input-mode transmits key RELEASES and bare
+// modifiers (a lone right-ctrl); zellij's Windows decoder turned some of those
+// into phantom keys that fired ctrl+b (backgrounded a session) and /clear
+// (wiped conversations). Classic VT encoding carries neither, so the mode
+// stays denied.
+{
+  const lua = read('workspace', 'wezterm', 'wezterm.lua');
+  check('win32-input-mode is denied (no key-release/bare-modifier events)',
+    /allow_win32_input_mode\s*=\s*false/.test(lua));
+}
+
+// --- the SessionStart hook makes an accidental /clear undoable ------------------
+// A /clear rolls the pane to a fresh session id; the hook must journal the
+// rebind and hand the NEW session the /resume command that restores the old one.
+{
+  const src = read('hooks', 'session-register.mjs');
+  check('hook journals rebinds to agent-keys/<key>.log', src.includes("'.log'"));
+  check('hook keeps the displaced session id in .prev', src.includes("'.prev'"));
+  check("hook announces the /resume undo on source 'clear'",
+    src.includes("source === 'clear'") && src.includes('/resume'));
+}
+
 // --- install.mjs renders the copy token per OS ---------------------------------
 {
   const src = read('install.mjs');

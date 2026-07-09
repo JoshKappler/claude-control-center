@@ -102,6 +102,24 @@ conversations came back only via a manual `/resume` search. (`/resume` inside a
 running agent works normally too — the picker lists this project's sessions
 whether they were launched here or in a plain terminal.)
 
+**Phantom keys can't wipe a conversation either** (2026-07-08 incidents: mangled
+right-side-key input fired `ctrl+b` and `/clear` inside working panes, and a
+`/clear` rolls the pane to a fresh session id — the conversation *looked*
+destroyed). Three layers now stand in the way:
+
+- **The input stream carries no raw material for phantoms.** `wezterm.lua` denies
+  win32-input-mode, the only encoding that transmits key *releases* and bare
+  modifiers (a lone right-ctrl); zellij's young Windows decoder was turning those
+  into phantom key combos. Classic VT encoding carries real keydowns only.
+- **Bare `ctrl+b` no longer backgrounds a task** (`workspace/claude/
+  keybindings.json`, deployed by `install.mjs`); the deliberate `ctrl+x ctrl+b`
+  chord still does.
+- **An accidental `/clear` announces its own undo.** The SessionStart hook
+  journals every pane rebind (`agent-keys/<key>.log`, displaced id in
+  `agent-keys/<key>.prev`) and, on a `/clear` roll, injects the predecessor's id
+  into the fresh session's context — the new Claude can immediately tell you
+  `/resume <old id>` brings the conversation back.
+
 One consequence: **zellij config changes (keybinds/layouts) only apply to NEW
 sessions.** After `node install.mjs`, finish or park your agents, end the session
 deliberately, then reopen — just closing and reopening the window reattaches to the

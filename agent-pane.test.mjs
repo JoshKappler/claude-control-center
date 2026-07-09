@@ -84,9 +84,9 @@ const CWD = 'C:\\Users\\x\\projects\\demo';
     HOME: FAKE_HOME, USERPROFILE: FAKE_HOME,       // os.homedir(): HOME on POSIX, USERPROFILE on Windows
     CC_PANE_KEY: 'm3launch-2', ZELLIJ_PANE_ID: '42',
   };
-  const fire = (event) => spawnSync('node', [hook], {
+  const fire = (event, extra = {}) => spawnSync('node', [hook], {
     env, encoding: 'utf8',
-    input: JSON.stringify({ hook_event_name: event, session_id: SID }),
+    input: JSON.stringify({ hook_event_name: event, session_id: SID, ...extra }),
   });
 
   fire('SessionStart');
@@ -99,6 +99,36 @@ const CWD = 'C:\\Users\\x\\projects\\demo';
   fire('SessionEnd');
   check('SessionEnd prunes the pane registration', readTrim(paneFile) === null);
   check('SessionEnd PRESERVES the agent-keys binding (continuity across exits)', readTrim(keyFile) === SID);
+
+  // --- rebind journal + /clear recovery (2026-07-08 stray-key incidents) --------
+  // The rule these pin: rolling a pane to a DIFFERENT session leaves breadcrumbs
+  // (.log history, .prev = displaced id), and a /clear roll additionally tells the
+  // NEW session (hook stdout -> injected context) how the user can undo it. A
+  // pane's first binding, and re-registering the same session, stay silent.
+  const logFile = keyFile + '.log';
+  const prevFile = keyFile + '.prev';
+  check('first binding leaves no journal debris', readTrim(logFile) === null && readTrim(prevFile) === null);
+
+  const SID_B = '11111111-2222-4333-8444-555555555555';
+  const rClear = fire('SessionStart', { session_id: SID_B, source: 'clear' });
+  check('clear-rebind updates the binding', readTrim(keyFile) === SID_B);
+  check('clear-rebind keeps the displaced id in .prev', readTrim(prevFile) === SID);
+  check('clear-rebind journals "<source> <old> -> <new>"',
+    (readTrim(logFile) || '').includes(`clear ${SID} -> ${SID_B}`));
+  check('clear-rebind stdout tells the new session how to undo',
+    String(rClear.stdout).includes(`/resume ${SID}`));
+
+  const rStartup = fire('SessionStart', { source: 'startup' });   // SID_B -> SID
+  check('non-clear rebind journals but says nothing',
+    (readTrim(logFile) || '').split('\n').length === 2
+    && readTrim(prevFile) === SID_B
+    && String(rStartup.stdout).trim() === '');
+
+  const rSame = fire('SessionStart', { source: 'resume' });       // SID -> SID (no-op)
+  check('same-session re-register adds no journal line and says nothing',
+    (readTrim(logFile) || '').split('\n').length === 2
+    && readTrim(prevFile) === SID_B
+    && String(rSame.stdout).trim() === '');
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
