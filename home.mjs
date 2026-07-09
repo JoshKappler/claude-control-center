@@ -92,11 +92,17 @@ function rowCounts(n, r) {
 // a reboot — instead of silently starting a fresh one. `nonce` makes each launch's
 // keys unique (two tabs on the same folder must not steal each other's sessions)
 // and is baked into the layout, so it survives zellij's session serialization.
+// `focus=true` on the first agent is load-bearing: the tab strip is now a terminal
+// pane (tabbar.mjs), and unlike the old `zellij:tab-bar` plugin — plugins can declare
+// themselves unselectable, terminal panes cannot — it is a focus target. Without this
+// the 1-row strip, being first in the layout, would swallow the tab's initial focus
+// and the agents would look dead. tabbar.mjs also bounces focus away if it ever
+// lands there anyway (Alt+Up from the top row).
 function gridKdl(n, rows, model, effort, app, nonce) {
   let k = 1;
   const rowToKdl = (cnt) => {
     const panes = [];
-    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="node" name="Claude ${k}" { args "${app}/agent-pane.mjs" "--key" "${nonce}-${k}" "--" "--dangerously-skip-permissions" "--model" "${model}" "--effort" "${effort}"; }`);
+    for (let i = 0; i < cnt; i++, k++) panes.push(`pane command="node" name="Claude ${k}"${k === 1 ? ' focus=true' : ''} { args "${app}/agent-pane.mjs" "--key" "${nonce}-${k}" "--" "--dangerously-skip-permissions" "--model" "${model}" "--effort" "${effort}"; }`);
     if (cnt === 1) return '                ' + panes[0];
     return '                pane split_direction="vertical" {\n'
       + panes.map((p) => '                    ' + p).join('\n')
@@ -114,7 +120,7 @@ function genLayout(n, app, model = 'opus', effort = 'xhigh', nonce = Date.now().
   return `// ${n} Claude agent${n === 1 ? '' : 's'} (${model}/${effort}) — generated for this window (balanced ${rows}-row grid). Alt+S reveals shortcuts.
 layout {
     default_tab_template {
-        pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
+        pane size=1 borderless=true command="node" { args "${app}/tabbar.mjs"; }
         children
     }
     tab {
@@ -190,6 +196,16 @@ function padLeft(s, n) { s = String(s == null ? '' : s); return s.length >= n ? 
 
 function termCols() { return (process.stdout.columns && process.stdout.columns > 0) ? process.stdout.columns : 80; }
 function termRows() { return (process.stdout.rows && process.stdout.rows > 0) ? process.stdout.rows : 24; }
+
+// Smallest project list worth calling a list: two entries plus the "(N of M)" row.
+// Even on a pane too short for the dashboard chrome, this many folder rows are
+// reserved and the bottom sections are clipped to pay for them.
+const MIN_FOLDER_ROWS = 3;
+
+// Set by home-pane.mjs, the supervisor that owns the Home pane. When supervised,
+// nothing the user can type may end this process — a dead Home is unrecoverable
+// (zellij strips `command=` from the serialized pane). Standalone, Ctrl+C exits.
+const SUPERVISED = process.env.CC_SUPERVISED === '1';
 
 // ---------- directories ----------
 function defaultRoot() {
@@ -761,13 +777,26 @@ function render() {
   // the FOLDERS header. Measuring the rest of the dashboard (instead of a fixed
   // constant) keeps the cheat sheet pinned at the bottom however tall the other
   // sections are, and self-corrects on resize / when subagents appear.
+  //
+  // BUDGET, not a floor. The old code took `Math.max(3, rows - 1 - lines.length)`,
+  // which ADDS three rows even when there is already no room — so on any pane
+  // shorter than the fixed chrome the frame ran past the bottom, the terminal
+  // scrolled, and the TOP of the frame (title, folder path, the folder list itself)
+  // slid off the screen for good. That is the "there is no list of projects" bug:
+  // the list was always drawn, just above the visible region. The list must never
+  // be pushed off by content BELOW it, so the leftover space is what it is, and if
+  // that leaves us over budget we drop rows from the BOTTOM (see the clamp below).
+  const budget = Math.max(1, termRows() - 1);                     // -1: leave the bottom row clear
   {
     const folderLines = [];
     if (state.entries.length === 0) {
       folderLines.push('    ' + DGREEN + '(this folder has no sub-folders)' + RESET);
     } else {
       const all = state.entries.length;
-      const avail = Math.max(3, termRows() - 1 - lines.length);   // -1: leave the bottom row clear
+      // Always show SOME projects — the screen exists to pick one. On a pane too
+      // short for the chrome this reserves MIN_FOLDER_ROWS and the clamp pays for
+      // it out of the bottom sections.
+      const avail = Math.max(MIN_FOLDER_ROWS, budget - lines.length);
       let start = 0, count = all, indicator = false;
       if (all > avail) {
         count = avail - 1;                                        // reserve a row for the (N of M) line
@@ -788,6 +817,14 @@ function render() {
     }
     lines.splice(folderInsertAt, 0, ...folderLines);
   }
+
+  // Hard clamp: never emit more lines than the pane can hold. Writing past the
+  // bottom scrolls the terminal, and everything above scrolls away with it. When
+  // the frame is over budget the rows we sacrifice come off the END (the cheat
+  // sheet, then SYSTEM, then SUBAGENTS…) — the title and the project list at the
+  // top are the things the user actually needs, and Alt+S still lists every
+  // shortcut. This is the single invariant render.test.mjs pins at every height.
+  if (lines.length > budget) lines.length = budget;
 
   // Differential frame: home cursor, clear each line to EOL, clear below at the
   // end. No full-screen [2J -> no flicker when keys repeat.
@@ -867,7 +904,13 @@ function act(name, ch) {
     if (ch != null && ch >= ' ' && ch !== '\x7f') { if (state.promptValue.length < 64) state.promptValue += ch; redraw(); return; }
     return;   // ignore arrows/tab while typing a name
   }
-  if (name === 'quit') { cleanupAndExit(0); return; }
+  // Under home-pane.mjs the dashboard is the pane and must never close: a closed
+  // Home is unrecoverable (zellij drops the pane's command= from the serialized
+  // session). Standalone (`node home.mjs` in a terminal) Ctrl+C still exits.
+  if (name === 'quit') {
+    if (SUPERVISED) { setStatus('Home stays open. Close the whole window with ' + osKeys('Ctrl+Alt+Q') + ', or just close the terminal.', 'info'); redraw(); return; }
+    cleanupAndExit(0); return;
+  }
   if (name === 'enter') { if (state.focus === 'dirs') launch(); else openInspector(); redraw(); return; }
   if (name === 'tab') {
     // Only hand the arrows to the subagents list when there is actually something
@@ -900,7 +943,9 @@ function onPrintable(ch) {
   if (ch === 'g') { gitPush(); redraw(); return; }
   if (ch === 'n') { state.prompt = 'newfolder'; state.promptValue = ''; setStatus('', 'info'); redraw(); return; }
   if (ch === '?') { state.showHelp = true; redraw(); return; }
-  if (ch === 'q') { cleanupAndExit(0); return; }
+  // NO single-key quit. `q` sat one keystroke away from `g` (push) and `c` (pull)
+  // on the same row of the cheat sheet, and it destroyed Home permanently. Nothing
+  // on this screen may close the dashboard.
   if (ch === 'k') { act('up'); return; }
   if (ch === 'j') { act('down'); return; }
   if (ch === 'h') { act('left'); return; }
@@ -1069,7 +1114,26 @@ function cleanupAndExit(code) {
   try { process.stdin.pause(); } catch { /* */ }
   process.exit(code == null ? 0 : code);
 }
-function tick() { try { sampleSystem(); } catch { /* */ } try { state.sync = readSync(); } catch { /* */ } redraw(); }
+// Every second. redraw() was unguarded here: a throw inside render() escaped the
+// interval callback as an uncaught exception and took the whole dashboard down a
+// second after whatever caused it — with no visible connection to the trigger.
+function tick() {
+  try { sampleSystem(); } catch { /* */ }
+  try { state.sync = readSync(); } catch { /* */ }
+  try { redraw(); } catch (e) { setStatus('render error: ' + asciiSafe(e && e.message), 'error'); }
+}
+
+// Last line of defence. An uncaught throw anywhere (a timer, a child-process
+// callback, a stray promise) used to kill Home silently and forever. Record it,
+// hand the terminal back, and exit non-zero so the supervisor restarts us.
+function fatal(kind, e) {
+  const msg = kind + ': ' + ((e && (e.stack || e.message)) || String(e));
+  try {
+    fs.mkdirSync(stateRoot(), { recursive: true });
+    fs.appendFileSync(path.join(stateRoot(), 'home-crash.log'), new Date().toISOString() + '  ' + msg + '\n', 'utf8');
+  } catch { /* */ }
+  try { cleanupAndExit(1); } catch { process.exit(1); }
+}
 
 function main() {
   ensureStateRoot();
@@ -1083,7 +1147,10 @@ function main() {
   setTimeout(() => { acceptInput = true; inbuf = ''; }, 1500);
   process.stdin.on('data', (chunk) => { try { feed(chunk); } catch (e) { setStatus('input error: ' + asciiSafe(e && e.message), 'error'); try { redraw(); } catch { /* */ } } });
   process.stdin.on('error', () => { /* ignore */ });
-  process.on('SIGINT', () => cleanupAndExit(0));
+  process.on('uncaughtException', (e) => fatal('uncaughtException', e));
+  process.on('unhandledRejection', (e) => fatal('unhandledRejection', e));
+  // Supervised, Ctrl+C must not close the pane; SIGTERM is zellij closing it for real.
+  process.on('SIGINT', () => { if (!SUPERVISED) cleanupAndExit(0); });
   process.on('SIGTERM', () => cleanupAndExit(0));
   process.stdout.on('resize', () => { try { redraw(); } catch { /* */ } });
   try { cpuPercent(); } catch { /* */ }

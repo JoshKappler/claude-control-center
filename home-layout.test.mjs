@@ -24,9 +24,14 @@ function check(name, cond) {
 }
 
 check('Home layout defines the Home tab', /tab\s+name="Home"/.test(kdl));
-check('Home tab still runs the Home dashboard (home.mjs)', kdl.includes('home.mjs'));
+// Supervised, not bare: a bare `home.mjs` pane is the bug — when it exits zellij
+// drops `command=` from the serialized tab and Home never comes back.
+check('Home tab runs the Home dashboard under its supervisor', kdl.includes('home-pane.mjs'));
 // The fix: Home carries the tab strip so open tabs stay visible when Home is focused.
-check('Home tab includes the tab strip (zellij:tab-bar)', kdl.includes('zellij:tab-bar'));
+check('Home tab includes the tab strip (tabbar.mjs)', kdl.includes('tabbar.mjs'));
+// Match the directive, not the word: the file's comments still name the plugin they
+// explain the replacement of.
+check('Home tab no longer uses the chevron plugin', !/plugin\s+location="zellij:tab-bar"/.test(kdl));
 
 if (failures) { console.log('\n' + failures + ' FAILURE(S)'); process.exit(1); }
 console.log('\nALL PASS');

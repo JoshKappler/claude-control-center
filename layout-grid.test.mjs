@@ -65,7 +65,8 @@ for (let n = 1; n <= 8; n++) {
   // The bottom hint row is GONE by design: all keys live in the Alt+S overlay, so
   // agents get the full height. Only the top tab strip remains.
   check(`genLayout(${n}) includes the tab strip and no bottom hint row`,
-    kdl.includes('zellij:tab-bar') && !kdl.includes('hintbar.mjs'));
+    kdl.includes('tabbar.mjs') && !kdl.includes('hintbar.mjs'));
+  check(`genLayout(${n}) uses our tab strip, not the chevron plugin`, !kdl.includes('zellij:tab-bar'));
   check(`genLayout(${n}) has no old agentbar/separator panes`,
     !kdl.includes('agentbar.mjs') && !kdl.includes('separator.mjs'));
   // every `args "..."` child node must end in a terminator before its closing brace

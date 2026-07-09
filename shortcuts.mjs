@@ -80,7 +80,8 @@ export const DASHBOARD = [
     { keys: 'g',     label: 'push',       desc: 'push every repo to GitHub' },
     { keys: 'c',     label: 'pull',       desc: 'pull every repo from GitHub' },
     { keys: '?',     label: 'help',       desc: 'show the dashboard help' },
-    { keys: 'q',     label: 'quit',       desc: 'quit the dashboard (agents keep running)' },
+    // No `q`/quit. Home is the pane; closing it was unrecoverable (zellij drops the
+    // pane's command from the saved session), and `q` lived one key from `g`/`c`.
   ] },
 ];
 

@@ -41,46 +41,50 @@ function frameLines(rows, cols) {
 }
 
 // The dashboard's fixed sections (header, launch, sync, limits, subagents, system,
-// cheat sheet) total ~30 rows, so it needs a realistic terminal height. The real
-// window is a tall vertical monitor, so these are the sizes that matter.
-for (const rows of [70, 50, 40]) {
+// cheat sheet) total ~34 rows. SHORT heights are the ones that used to break: the
+// frame was emitted at full height regardless, so the terminal scrolled and the
+// title + folder list — which sit at the TOP — slid off the screen. The user saw a
+// dashboard that began at LAUNCH, with no projects to pick from. Every height here
+// must fit, and the top of the frame must survive; the cheat sheet at the BOTTOM is
+// what gets sacrificed when there isn't room (Alt+S still shows every shortcut).
+for (const rows of [70, 50, 40, 34, 30, 24]) {
   const cols = 100;
   const lines = frameLines(rows, cols);
   const text = lines.join('\n');
 
   // (1) Fits the screen: rendered height never exceeds the viewport (leave the
   //     bottom row clear so the trailing newline can't scroll the header away).
+  //     This is THE invariant — a frame taller than the pane scrolls the top away.
   check(`rows=${rows}: frame fits (${lines.length} <= ${rows - 1})`, lines.length <= rows - 1, `${lines.length} lines`);
 
-  // (2) Cheat sheet is present and is the LAST content (pinned to the bottom).
-  const windowIdx = lines.findIndex((l) => l.startsWith('WINDOW'));
-  check(`rows=${rows}: WINDOW cheat-sheet row present`, windowIdx !== -1);
-  check(`rows=${rows}: cheat sheet is the bottom-most content`, windowIdx === lines.length - 1, `WINDOW at ${windowIdx}/${lines.length - 1}`);
-  check(`rows=${rows}: MOVE + DO + WINDOW all present`,
-    lines.some((l) => l.startsWith('MOVE')) && lines.some((l) => l.startsWith('DO')) && windowIdx !== -1);
+  // (2) The top of the frame always survives: title, the current folder path, and
+  //     the FOLDERS header. If these scroll off, the dashboard looks decapitated.
+  check(`rows=${rows}: title visible`, lines.some((l) => l.includes('CLAUDE CONTROL CENTER')), 'title scrolled off');
+  check(`rows=${rows}: Folder path visible`, lines.some((l) => l.startsWith('Folder ')));
+  check(`rows=${rows}: FOLDERS header visible`, lines.some((l) => l.includes('FOLDERS')));
 
   // (3) The duplicate top guide is gone.
   check(`rows=${rows}: no duplicate top "Use the ARROW KEYS" guide`, !text.includes('Use the ARROW KEYS'));
 
-  // (4) Folder list grows with height: a taller screen shows strictly more folders.
+  // (4) There is ALWAYS a project list to pick from — that is the whole point of
+  //     the screen. It grows with height; a taller screen shows strictly more.
   const folderStart = lines.findIndex((l) => l.includes('FOLDERS'));
   const launchIdx = lines.findIndex((l) => l.startsWith('LAUNCH'));
-  const folderCount = (folderStart !== -1 && launchIdx !== -1)
-    ? lines.slice(folderStart + 1, launchIdx).filter((l) => l.trim() && !l.includes('---')).length
+  const folderCount = (folderStart !== -1)
+    ? lines.slice(folderStart + 1, launchIdx === -1 ? lines.length : launchIdx).filter((l) => l.trim() && !l.includes('---')).length
     : 0;
   check(`rows=${rows}: folder list is non-empty`, folderCount > 0, `${folderCount} rows`);
   if (rows === 50) check('rows=50: folder list exceeds the old 8-row cap', folderCount > 8, `${folderCount} folder rows`);
-}
 
-// Graceful floor: on an unrealistically short terminal the folder list collapses to
-// its 3-row minimum (rather than vanishing or throwing). Full fit isn't possible
-// when the fixed sections alone exceed the height — that's an inherent minimum.
-{
-  const lines = frameLines(24, 100);
-  const fs = lines.findIndex((l) => l.includes('FOLDERS'));
-  const li = lines.findIndex((l) => l.startsWith('LAUNCH'));
-  const fc = (fs !== -1 && li !== -1) ? lines.slice(fs + 1, li).filter((l) => l.trim() && !l.includes('---')).length : 0;
-  check('rows=24: folder list holds at its 3-row floor', fc === 3, `${fc} rows`);
+  // (5) Cheat sheet is pinned to the bottom — but only when the screen is tall
+  //     enough to hold it. On short screens it is the first thing dropped.
+  if (rows >= 40) {
+    const windowIdx = lines.findIndex((l) => l.startsWith('WINDOW'));
+    check(`rows=${rows}: WINDOW cheat-sheet row present`, windowIdx !== -1);
+    check(`rows=${rows}: cheat sheet is the bottom-most content`, windowIdx === lines.length - 1, `WINDOW at ${windowIdx}/${lines.length - 1}`);
+    check(`rows=${rows}: MOVE + DO + WINDOW all present`,
+      lines.some((l) => l.startsWith('MOVE')) && lines.some((l) => l.startsWith('DO')) && windowIdx !== -1);
+  }
 }
 
 // A tall screen must show more folders than a short one (the list truly fills).

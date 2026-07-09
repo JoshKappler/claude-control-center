@@ -3,23 +3,39 @@
 // `default_layout "cc-default"` resolves it by name; the launcher creates the
 // session via `zellij attach -c claude-cc`.
 //
-// Home carries the SAME tab strip the agent tabs do (zellij:tab-bar). Zellij draws
-// the strip per-tab, so a tab without one shows no strip at all while it is focused.
+// Home carries the SAME tab strip the agent tabs do (tabbar.mjs). Zellij draws the
+// strip per-tab, so a tab without one shows no strip at all while it is focused.
 // Home used to omit it — which made switching to Home look like it closed every
 // other tab: the strip vanished and the open agent tabs only "reappeared" once focus
 // landed on a tab that HAD a strip (e.g. a freshly launched one). They were never
 // closed, just hidden. Keeping the strip here means open tabs are always visible.
-// The plugin prefixes the session name ("Zellij (claude-cc)") — a small cosmetic
-// label, and a fair trade for never losing sight of your windows.
+//
+// The strip is OURS, not `zellij:tab-bar`: the built-in plugin draws chevrons, tags
+// every strip with the session name ("Zellij (claude-cc)"), and offers no way to
+// close a tab. tabbar.mjs draws real tab pills with a clickable ✕ — which matters
+// because session_serialization restores every old tab on restart.
 layout {
     tab name="Home" focus=true {
         // Tab strip on top (1 row), matching the agent tabs, so every open window is
-        // always visible from Home too. Switch with Alt+] / Alt+H, or click a tab.
-        pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
+        // always visible from Home too. Click a tab to switch, click its ✕ to close.
+        pane size=1 borderless=true command="node" {
+            args "{{APP}}/tabbar.mjs"
+        }
         // borderless: keep the dashboard frameless even though pane_frames is on
         // (frames are for the agent tabs, to show which Claude is focused).
-        pane borderless=true command="node" {
-            args "{{APP}}/home.mjs"
+        //
+        // The pane runs the SUPERVISOR, not the dashboard. home-pane.mjs never
+        // exits; it respawns home.mjs on any death and logs the reason. When the
+        // pane's own command exits, zellij re-serializes this tab WITHOUT its
+        // `command=` line, and Home resurrects as a blank pane on every future
+        // attach — permanently. Supervising it means that can never happen.
+        //
+        // focus=true: the strip above is a terminal pane now, and terminal panes are
+        // always focus targets (only plugins can declare themselves unselectable).
+        // Being first in the layout it would otherwise take the tab's initial focus
+        // and the dashboard would ignore every key.
+        pane borderless=true focus=true command="node" {
+            args "{{APP}}/home-pane.mjs"
         }
     }
 }
