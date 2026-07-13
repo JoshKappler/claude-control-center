@@ -113,8 +113,11 @@ function gridKdl(n, rows, model, effort, app, nonce) {
   return '                pane split_direction="horizontal" {\n' + body + '\n                }';
 }
 
-// No hint row at the bottom any more: every key (including the resize story) lives
-// in the Alt+S overlay, and Home + its help advertise Alt+S. Agents get the full height.
+// The bottom hint row is back (2026-07-13). It was dropped in favor of the Alt+S
+// overlay, but an overlay only helps if you already know Alt+S: with the tab strip
+// unable to receive real clicks (zellij never routes mouse to the never-focused
+// strip pane), a user in an agent tab had NO visible way back to Home. One dim row
+// naming the escape keys costs one line and ends the stranding.
 function genLayout(n, app, model = 'opus', effort = 'xhigh', nonce = Date.now().toString(36)) {
   const { rows } = chooseGrid(n, termCols(), termRows());
   return `// ${n} Claude agent${n === 1 ? '' : 's'} (${model}/${effort}) — generated for this window (balanced ${rows}-row grid). Alt+S reveals shortcuts.
@@ -122,6 +125,7 @@ layout {
     default_tab_template {
         pane size=1 borderless=true command="node" { args "${app}/tabbar.mjs"; }
         children
+        pane size=1 borderless=true command="node" { args "${app}/hintbar.mjs"; }
     }
     tab {
         pane split_direction="horizontal" {

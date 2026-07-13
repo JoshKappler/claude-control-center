@@ -69,8 +69,10 @@ the tables below use the generic `Alt` name:
 > `workspace/zellij/config.kdl` (deployed by `install.mjs`); keep its keybinds
 > in sync with `shortcuts.mjs`.
 
-Click the **Home** tab (leftmost) to come back to the dashboard. Casual navigation
-never closes an agent — closing is always a deliberate `Ctrl+Alt+w` / `Ctrl+Alt+q`.
+`Alt+H` brings you back to the dashboard from any window, and the dim hint line at
+the bottom of every agent window lists the escape keys (`Alt+S` shows the full
+list). Casual navigation never closes an agent — closing is always a deliberate
+`Ctrl+Alt+w` / `Ctrl+Alt+q`.
 
 ## The session is durable — nothing can silently kill it
 

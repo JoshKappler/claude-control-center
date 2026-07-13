@@ -8,7 +8,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { osKeys } from './shortcuts.mjs';
+import { IN_TAB, fitGroups, osKeys } from './shortcuts.mjs';
 import { tuiSgr } from './themes.mjs';
 
 const ESC = '\x1b';
@@ -17,14 +17,35 @@ const DIM = ESC + '[2m' + tuiSgr().DIM;   // dim + the theme's muted ink — a q
 
 function cols() { return (process.stdout.columns && process.stdout.columns > 0) ? process.stdout.columns : 80; }
 
-// NOTE: new layouts no longer include this bar (the Alt+S overlay carries all the
-// keys); it keeps working for tabs launched before that change.
-const HINT = osKeys(' Press Alt+S for keyboard shortcuts');
+// Back in every generated agent tab (2026-07-13): the Alt+S overlay only helps if
+// you already know Alt+S, and the tab strip can't receive real clicks (zellij never
+// routes mouse to the never-focused strip pane), so this row must name the actual
+// escape keys. Keys come from shortcuts.mjs — the single source the overlay and the
+// Home cheatsheet read — so the hint can never drift from the real bindings.
+// `essential` groups survive any width (fitGroups drops non-essential from the end).
+const PICK = [
+  { label: 'jump to the Home dashboard', short: 'Home', essential: true },
+  { label: 'move between agents', short: 'switch agent' },
+  { label: 'jump to window 1-9', short: 'window 1-9' },
+  { label: 'close this one agent', short: 'close agent' },
+  { label: 'show / hide this list', short: 'all shortcuts', essential: true },
+];
+const GROUPS = PICK
+  .map((p) => {
+    const it = IN_TAB.find((g) => g.label === p.label);
+    return it ? { keys: it.keys, label: p.short, essential: !!p.essential } : null;
+  })
+  .filter(Boolean);
 
 // Build the hint text, clipped to the row width (no padding — dim text, not a bar).
+// If shortcuts.mjs ever drifts so far that nothing matches, fall back to the old
+// bare Alt+S pointer rather than rendering an empty row.
 export function buildHint(width) {
   const W = Math.max(1, width);
-  return HINT.length > W ? HINT.slice(0, W) : HINT;
+  const line = GROUPS.length
+    ? ' ' + fitGroups(GROUPS, W - 1).map((g) => g.keys + ' = ' + g.label).join('   .   ')
+    : osKeys(' Press Alt+S for keyboard shortcuts');
+  return line.length > W ? line.slice(0, W) : line;
 }
 
 function draw() {

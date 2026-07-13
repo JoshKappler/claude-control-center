@@ -46,8 +46,8 @@ for (let n = 1; n <= 8; n++) {
   check(`n=${n}: no empty rows`, counts.every((c) => c >= 1));
 }
 
-// --- genLayout output is structurally sound: one pane per agent + the top hint row
-//     (hintbar), no bottom strip, and every node is properly terminated. Agents run
+// --- genLayout output is structurally sound: one pane per agent, the top tab strip,
+//     the bottom hint row (hintbar), and every node is properly terminated. Agents run
 //     through agent-pane.mjs (conversation continuity), each with a UNIQUE key that
 //     carries the launch nonce — that is what lets a re-run/resurrected pane resume
 //     its own conversation instead of starting a fresh one. ---
@@ -62,10 +62,11 @@ for (let n = 1; n <= 8; n++) {
     keys.length === n && new Set(keys).size === n && keys.every((k) => k.startsWith('nonceA-')));
   check(`genLayout(${n}) still passes the claude flags through`,
     kdl.includes('"--dangerously-skip-permissions"') && kdl.includes('"--model" "opus"') && kdl.includes('"--effort" "xhigh"'));
-  // The bottom hint row is GONE by design: all keys live in the Alt+S overlay, so
-  // agents get the full height. Only the top tab strip remains.
-  check(`genLayout(${n}) includes the tab strip and no bottom hint row`,
-    kdl.includes('tabbar.mjs') && !kdl.includes('hintbar.mjs'));
+  // The bottom hint row is BACK (2026-07-13): the Alt+S overlay only helps if you
+  // already know Alt+S. A user stranded in an agent tab (the ✕ pill can't receive
+  // real clicks on this zellij) needs the escape keys visible on screen.
+  check(`genLayout(${n}) includes the tab strip AND the bottom hint row`,
+    kdl.includes('tabbar.mjs') && kdl.includes('hintbar.mjs'));
   check(`genLayout(${n}) uses our tab strip, not the chevron plugin`, !kdl.includes('zellij:tab-bar'));
   check(`genLayout(${n}) has no old agentbar/separator panes`,
     !kdl.includes('agentbar.mjs') && !kdl.includes('separator.mjs'));
