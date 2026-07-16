@@ -4,7 +4,7 @@
 //
 // Usage:
 //   node clone-all.mjs [root] [--dry]
-//     root   directory to populate (default: ~/OneDrive/desktop/projects, else ~)
+//     root   directory to populate (default: ~/OneDrive/desktop/projects, else the folder this repo sits in)
 //     --dry  enumerate + report intended actions, but do NOT clone/fetch/pull
 //
 // Behavior (safe by design — never discards local work):
@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const EXCLUDE = new Set(['dotfiles']); // the config repo lives at ~/.local/share/chezmoi
 
@@ -104,7 +105,9 @@ function defaultRoot() {
   try { if (fs.statSync(cand).isDirectory()) return cand; } catch { /* */ }
   const cand2 = path.join(os.homedir(), 'desktop', 'projects');
   try { if (fs.statSync(cand2).isDirectory()) return cand2; } catch { /* */ }
-  return os.homedir();
+  // Self-locate like sync-daemon: the projects root is the folder this repo
+  // sits in. Never fall back to $HOME — a bare run once spilled 35 clones there.
+  return path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 }
 
 function listRepos() {
